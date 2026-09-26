@@ -67,11 +67,11 @@ export function MinimalTypewriter({
   cursorColor = "#E6E4DE",
   matrixColor = "#175fab",
   matrixGlow = true,
-  scrambleCount = 2,
-  scrambleSpeed = 28,
-  pauseFirst = 1300,
-  pauseSecond = 1400,
-  deletingSpeed = 28,
+  scrambleCount = 3,
+  scrambleSpeed = 40,
+  pauseFirst = 1600,
+  pauseSecond = 1800,
+  deletingSpeed = 40,
   cursorWidth = "2px",
   characters = DEFAULT_MATRIX_CHARS,
 }: MinimalTypewriterProps) {
@@ -95,13 +95,13 @@ export function MinimalTypewriter({
   };
 
   useEffect(() => {
-    // Balanced, organic typewriter timing variations
-    const getTypingDelay = () => 30 + Math.floor(Math.random() * 16);
+    // Deliberate typewriter timing variations with clear decrypt visibility
+    const getTypingDelay = () => 50 + Math.floor(Math.random() * 25);
 
     if (phase === "initial-delay") {
       timerRef.current = setTimeout(() => {
         setPhase("typing");
-      }, 200);
+      }, 280);
     } else if (phase === "typing") {
       const targetText = sequence[phraseIndex] ?? "";
       const targetGraphemes = splitIntoGraphemes(targetText);
@@ -189,7 +189,7 @@ export function MinimalTypewriter({
               next[next.length - 1] = { char: getRandomChar(), isScrambling: true };
               return next;
             });
-          }, Math.max(16, Math.floor(deletingSpeed * 0.65)));
+          }, Math.max(24, Math.floor(deletingSpeed * 0.7)));
         } else {
           timerRef.current = setTimeout(() => {
             setDisplayChars((prev) => prev.slice(0, -1));
@@ -202,7 +202,7 @@ export function MinimalTypewriter({
       timerRef.current = setTimeout(() => {
         setPhraseIndex((prev) => (prev + 1) % sequence.length);
         setPhase("typing");
-      }, 200);
+      }, 280);
     }
 
     return () => {
