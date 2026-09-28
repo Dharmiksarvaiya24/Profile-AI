@@ -35,3 +35,39 @@ body {
   background-repeat: repeat;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0.3333 0.3333 0.3333 0 0 0.3333 0.3333 0.3333 0 0 0.3333 0.3333 0.3333 0 0 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
+
+/* 5-second recurring pop animation */
+@keyframes scrollPop {
+  0%, 78%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.8;
+    filter: drop-shadow(0 0 6px rgba(0, 115, 237, 0.35));
+  }
+  82% {
+    transform: translateY(3px) scale(0.94);
+    opacity: 0.9;
+  }
+  86% {
+    transform: translateY(-10px) scale(1.22);
+    opacity: 1;
+    filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.95)) drop-shadow(0 0 32px rgba(0, 115, 237, 0.75));
+  }
+  90% {
+    transform: translateY(2px) scale(0.97);
+    opacity: 0.95;
+  }
+  94% {
+    transform: translateY(-3px) scale(1.08);
+    opacity: 0.95;
+    filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.7));
+  }
+  98% {
+    transform: translateY(0) scale(1.02);
+    opacity: 0.85;
+  }
+}
+
+.animate-scroll-pop {
+  animation: scrollPop 5s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+}
+
