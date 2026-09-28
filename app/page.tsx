@@ -1,7 +1,7 @@
 import Image from "next/image";
 import LightRays from "@/components/LightRays";
 import MinimalTypewriter from "@/components/MinimalTypewriter";
-import ScrollIndicator from "@/components/ScrollIndicator";
+import MacbookWrapper from "@/components/MacbookWrapper";
 import { Press_Start_2P, JetBrains_Mono } from "next/font/google";
 
 const arcadeFont = Press_Start_2P({
@@ -16,8 +16,8 @@ const monoFont = JetBrains_Mono({
 
 export default function Home() {
   return (
-    <main className="relative h-[100dvh] w-full overflow-hidden select-none">
-      <ScrollIndicator />
+    <main className="relative w-full select-none">
+      <MacbookWrapper />
 
       {/* LightRays fills the entire viewport behind content responsively */}
       <div className="fixed inset-0 w-full h-[100dvh] pointer-events-none z-0 overflow-hidden">
@@ -36,8 +36,11 @@ export default function Home() {
         />
       </div>
 
-      {/* Static hero container that stays fixed and does not move on scroll */}
-      <div className="fixed inset-0 z-10 flex flex-col items-center justify-center text-center px-6 sm:px-12 md:px-24 pointer-events-none">
+      {/* Hero container that scrolls up and away normally */}
+      <div
+        id="hero-content"
+        className="absolute top-0 left-0 w-full min-h-[100dvh] z-20 flex flex-col items-center justify-center text-center px-6 sm:px-12 md:px-24 pointer-events-none"
+      >
         <div className="pointer-events-auto flex flex-col items-center justify-center text-center -translate-y-8 sm:-translate-y-12 md:-translate-y-14 gap-16 sm:gap-20 md:gap-24">
           {/* Typewriter Text on top with locked container height to prevent layout shift */}
           <div className="flex items-center justify-center h-12 sm:h-18 md:h-18 lg:h-20 -translate-y-16 sm:translate-y-0">
