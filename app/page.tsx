@@ -2,6 +2,7 @@ import Image from "next/image";
 import LightRays from "@/components/LightRays";
 import MinimalTypewriter from "@/components/MinimalTypewriter";
 import MacbookWrapper from "@/components/MacbookWrapper";
+import ScrollIndicator from "@/components/ScrollIndicator";
 import { Press_Start_2P, JetBrains_Mono } from "next/font/google";
 
 const arcadeFont = Press_Start_2P({
@@ -95,6 +96,9 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* Scroll Indicator placed within hero container so it scrolls away naturally */}
+        <ScrollIndicator />
       </div>
     </main>
   );
