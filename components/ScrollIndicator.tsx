@@ -347,16 +347,16 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
   return <canvas ref={canvasRef} className={className} />;
 };
 
-export default function ScrollIndicator() {
+export default function ScrollIndicator({ className = "" }: { className?: string }) {
   const handleScroll = () => {
     window.scrollBy({
-      top: window.innerHeight * 0.8,
+      top: window.innerHeight * 0.85,
       behavior: "smooth",
     });
   };
 
   return (
-    <div className="fixed bottom-6 sm:bottom-8 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+    <div className={`absolute bottom-16 sm:bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-auto ${className}`}>
       <button
         type="button"
         onClick={handleScroll}
@@ -365,7 +365,7 @@ export default function ScrollIndicator() {
       >
         <span className="relative flex items-center justify-center drop-shadow-[0_0_12px_rgba(56,189,248,0.6)]">
           <FuzzyText baseIntensity={0.1} hoverIntensity={0.66} enableHover>
-          ⬇ Scroll
+            Scroll
           </FuzzyText>
         </span>
       </button>
