@@ -1,5 +1,5 @@
 import Image from "next/image";
-import LightRays from "@/components/LightRays";
+import LightRaysWrapper from "@/components/LightRaysWrapper";
 import MinimalTypewriter from "@/components/MinimalTypewriter";
 import MacbookWrapper from "@/components/MacbookWrapper";
 import ScrollIndicator from "@/components/ScrollIndicator";
@@ -22,19 +22,7 @@ export default function Home() {
 
       {/* LightRays fills the entire viewport behind content responsively */}
       <div className="fixed inset-0 w-full h-[100dvh] pointer-events-none z-0 overflow-hidden">
-        <LightRays
-          raysOrigin="top-center"
-          raysColor="#0073ed"
-          raysSpeed={1.4}
-          lightSpread={0.85}
-          rayLength={1.4}
-          followMouse={false}
-          mouseInfluence={0}
-          noiseAmount={0.2}
-          distortion={0.04}
-          fadeDistance={1.8}
-          saturation={0}
-        />
+        <LightRaysWrapper />
       </div>
 
       {/* Hero container that scrolls up and away normally */}

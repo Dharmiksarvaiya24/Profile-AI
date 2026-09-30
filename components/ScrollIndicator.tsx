@@ -52,6 +52,8 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
   className = "",
 }) => {
   const canvasRef = useRef<HTMLCanvasElement & { cleanupFuzzyText?: () => void }>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const isVisibleRef = useRef(true);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -192,8 +194,15 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
 
       if (glitchMode) startGlitchLoop();
 
+      let triggerRun: (() => void) | null = null;
+
       const run = (timestamp: number) => {
         if (isCancelled) return;
+
+        // Pause animation completely when off-screen (restarted by IntersectionObserver)
+        if (!isVisibleRef.current) {
+          return;
+        }
 
         if (timestamp - lastFrameTime < frameDuration) {
           animationFrameId = window.requestAnimationFrame(run);
@@ -238,6 +247,14 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
         animationFrameId = window.requestAnimationFrame(run);
       };
 
+      triggerRun = () => {
+        if (!isCancelled && isVisibleRef.current) {
+          window.cancelAnimationFrame(animationFrameId);
+          lastFrameTime = performance.now();
+          animationFrameId = window.requestAnimationFrame(run);
+        }
+      };
+
       animationFrameId = window.requestAnimationFrame(run);
 
       const isInsideTextArea = (x: number, y: number) =>
@@ -268,8 +285,7 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
       };
 
       const handleTouchMove = (e: TouchEvent) => {
-        if (!enableHover) return;
-        e.preventDefault();
+        if (!enableHover || !e.touches[0]) return;
         const rect = canvas.getBoundingClientRect();
         const touch = e.touches[0];
         const x = touch.clientX - rect.left;
@@ -284,7 +300,7 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
       if (enableHover) {
         canvas.addEventListener("mousemove", handleMouseMove);
         canvas.addEventListener("mouseleave", handleMouseLeave);
-        canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+        canvas.addEventListener("touchmove", handleTouchMove, { passive: true });
         canvas.addEventListener("touchend", handleTouchEnd);
       }
 
@@ -309,6 +325,22 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
       };
 
       canvas.cleanupFuzzyText = cleanup;
+
+      // IntersectionObserver to pause animation when off-screen
+      if (typeof IntersectionObserver !== "undefined") {
+        observerRef.current = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              const wasVisible = isVisibleRef.current;
+              isVisibleRef.current = entry.isIntersecting;
+              if (entry.isIntersecting && !wasVisible && triggerRun) {
+                triggerRun();
+              }
+            });
+          },
+          { threshold: 0.1 }
+        );
+      }
     };
 
     init();
@@ -319,6 +351,10 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
       clearTimeout(glitchTimeoutId);
       clearTimeout(glitchEndTimeoutId);
       clearTimeout(clickTimeoutId);
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
       if (canvas && canvas.cleanupFuzzyText) {
         canvas.cleanupFuzzyText();
       }

@@ -13,6 +13,7 @@ if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
 }
 
+
 // ============================================================================
 // TUNABLE CONSTANTS (Auto-fit sizing, camera, lid, materials & render orders)
 // ============================================================================
@@ -88,6 +89,7 @@ interface ModelMeasurements {
 
 interface SceneProps {
   scrollProgressRef: React.MutableRefObject<number>;
+  scrollYRef: React.MutableRefObject<number>;
   onModelLoaded: () => void;
   isMobile: boolean;
 }
@@ -150,12 +152,12 @@ function createAppleLogoTexture(maxAnisotropy = 16): THREE.CanvasTexture {
 }
 
 // ============================================================================
-// Helper: Draw US MacBook Pro Keyboard on a 4096x1560 Fixed Native Canvas
+// Helper: Draw US MacBook Pro Keyboard on a 1536x585 Fixed Native Canvas (25% smaller than 2048x780)
 // ============================================================================
 function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
-  canvas.width = 4096;
-  canvas.height = 1560;
+  canvas.width = 1536;
+  canvas.height = 585;
   const ctx = canvas.getContext("2d");
 
   if (ctx) {
@@ -163,12 +165,12 @@ function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
 
     // 1. Speaker Grilles (Left and Right narrow vertical strips of micro-dots)
     ctx.fillStyle = "#0a0a0c";
-    const dotSpacing = 22;
-    const dotRadius = 3.8;
+    const dotSpacing = 8;
+    const dotRadius = 1.5;
 
     // Left speaker grille
-    for (let gx = 70; gx < 310; gx += dotSpacing) {
-      for (let gy = 100; gy < 1460; gy += dotSpacing) {
+    for (let gx = 26; gx < 116; gx += dotSpacing) {
+      for (let gy = 38; gy < 548; gy += dotSpacing) {
         ctx.beginPath();
         ctx.arc(gx, gy, dotRadius, 0, Math.PI * 2);
         ctx.fill();
@@ -176,8 +178,8 @@ function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
     }
 
     // Right speaker grille
-    for (let gx = canvas.width - 310; gx < canvas.width - 70; gx += dotSpacing) {
-      for (let gy = 100; gy < 1460; gy += dotSpacing) {
+    for (let gx = canvas.width - 116; gx < canvas.width - 26; gx += dotSpacing) {
+      for (let gy = 38; gy < 548; gy += dotSpacing) {
         ctx.beginPath();
         ctx.arc(gx, gy, dotRadius, 0, Math.PI * 2);
         ctx.fill();
@@ -185,11 +187,11 @@ function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
     }
 
     // 2. Keyboard Key Well (Anodized dark recessed well matching Midnight tone)
-    const wellX = 350;
-    const wellY = 60;
-    const wellW = canvas.width - 700; // 3396px
-    const wellH = 1440;
-    const wellR = 28;
+    const wellX = 131;
+    const wellY = 23;
+    const wellW = canvas.width - 262; // 1274px
+    const wellH = 540;
+    const wellR = 11;
 
     ctx.fillStyle = KEYBOARD_WELL_COLOR;
     ctx.beginPath();
@@ -197,16 +199,16 @@ function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
     ctx.fill();
 
     // 3. Draw Keys
-    const keyGap = 16;
-    const padX = 28;
-    const padY = 28;
-    const innerW = wellW - padX * 2; // 3340px
-    const keyRadius = 14;
+    const keyGap = 6;
+    const padX = 11;
+    const padY = 11;
+    const innerW = wellW - padX * 2; // 1252px
+    const keyRadius = 5;
     const keyColor = "#1c1c1e";
     const legendColor = "#d1d1d6";
 
-    // Row definitions for US MacBook Pro layout
-    const rowHeights = [116, 192, 192, 192, 192, 196];
+    // Row definitions for US MacBook Pro layout (scaled by 0.375 from original 4096)
+    const rowHeights = [44, 72, 72, 72, 72, 74];
 
     interface KeyDef {
       label: string;
@@ -332,15 +334,15 @@ function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
           const halfH = (rowH - keyGap) / 2;
           ctx.fillStyle = keyColor;
           ctx.beginPath();
-          ctx.roundRect(currentX, currentY, keyW, halfH, 10);
+          ctx.roundRect(currentX, currentY, keyW, halfH, 4);
           ctx.fill();
 
           // Up Arrow triangle
           ctx.fillStyle = legendColor;
           ctx.beginPath();
-          ctx.moveTo(currentX + keyW / 2, currentY + halfH / 2 - 10);
-          ctx.lineTo(currentX + keyW / 2 - 12, currentY + halfH / 2 + 10);
-          ctx.lineTo(currentX + keyW / 2 + 12, currentY + halfH / 2 + 10);
+          ctx.moveTo(currentX + keyW / 2, currentY + halfH / 2 - 4);
+          ctx.lineTo(currentX + keyW / 2 - 5, currentY + halfH / 2 + 4);
+          ctx.lineTo(currentX + keyW / 2 + 5, currentY + halfH / 2 + 4);
           ctx.closePath();
           ctx.fill();
 
@@ -348,15 +350,15 @@ function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
           const downY = currentY + halfH + keyGap;
           ctx.fillStyle = keyColor;
           ctx.beginPath();
-          ctx.roundRect(currentX, downY, keyW, halfH, 10);
+          ctx.roundRect(currentX, downY, keyW, halfH, 4);
           ctx.fill();
 
           // Down Arrow triangle
           ctx.fillStyle = legendColor;
           ctx.beginPath();
-          ctx.moveTo(currentX + keyW / 2, downY + halfH / 2 + 10);
-          ctx.lineTo(currentX + keyW / 2 - 12, downY + halfH / 2 - 10);
-          ctx.lineTo(currentX + keyW / 2 + 12, downY + halfH / 2 - 10);
+          ctx.moveTo(currentX + keyW / 2, downY + halfH / 2 + 4);
+          ctx.lineTo(currentX + keyW / 2 - 5, downY + halfH / 2 - 4);
+          ctx.lineTo(currentX + keyW / 2 + 5, downY + halfH / 2 - 4);
           ctx.closePath();
           ctx.fill();
         } else {
@@ -370,25 +372,23 @@ function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
             // Touch ID button
             ctx.fillStyle = "#121214";
             ctx.beginPath();
-            ctx.roundRect(currentX + 12, currentY + 12, keyW - 24, rowH - 24, 12);
+            ctx.roundRect(currentX + 5, currentY + 5, keyW - 10, rowH - 10, 5);
             ctx.fill();
-            ctx.strokeStyle = "#2c2c2e";
-            ctx.lineWidth = 3;
-            ctx.stroke();
+            // Removed stroke for performance - subtle anyway
           } else if (key.isArrow === "left") {
             // Left Arrow
             const halfH = (rowH - keyGap) / 2;
             const arrowY = currentY + halfH + keyGap; // aligned with down arrow
             ctx.fillStyle = keyColor;
             ctx.beginPath();
-            ctx.roundRect(currentX, arrowY, keyW, halfH, 10);
+            ctx.roundRect(currentX, arrowY, keyW, halfH, 4);
             ctx.fill();
 
             ctx.fillStyle = legendColor;
             ctx.beginPath();
-            ctx.moveTo(currentX + keyW / 2 - 10, arrowY + halfH / 2);
-            ctx.lineTo(currentX + keyW / 2 + 10, arrowY + halfH / 2 - 12);
-            ctx.lineTo(currentX + keyW / 2 + 10, arrowY + halfH / 2 + 12);
+            ctx.moveTo(currentX + keyW / 2 - 4, arrowY + halfH / 2);
+            ctx.lineTo(currentX + keyW / 2 + 4, arrowY + halfH / 2 - 5);
+            ctx.lineTo(currentX + keyW / 2 + 4, arrowY + halfH / 2 + 5);
             ctx.closePath();
             ctx.fill();
           } else if (key.isArrow === "right") {
@@ -397,30 +397,30 @@ function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
             const arrowY = currentY + halfH + keyGap;
             ctx.fillStyle = keyColor;
             ctx.beginPath();
-            ctx.roundRect(currentX, arrowY, keyW, halfH, 10);
+            ctx.roundRect(currentX, arrowY, keyW, halfH, 4);
             ctx.fill();
 
             ctx.fillStyle = legendColor;
             ctx.beginPath();
-            ctx.moveTo(currentX + keyW / 2 + 10, arrowY + halfH / 2);
-            ctx.lineTo(currentX + keyW / 2 - 10, arrowY + halfH / 2 - 12);
-            ctx.lineTo(currentX + keyW / 2 - 10, arrowY + halfH / 2 + 12);
+            ctx.moveTo(currentX + keyW / 2 + 4, arrowY + halfH / 2);
+            ctx.lineTo(currentX + keyW / 2 - 4, arrowY + halfH / 2 - 5);
+            ctx.lineTo(currentX + keyW / 2 - 4, arrowY + halfH / 2 + 5);
             ctx.closePath();
             ctx.fill();
           } else if (key.label) {
-            // Text legend drawn directly at native 4096px resolution
+            // Text legend drawn at scaled resolution - maintain clarity with proportional fonts
             ctx.fillStyle = legendColor;
-            const fontSize = rowIndex === 0 ? 38 : key.label.length > 2 ? 34 : 48;
+            const fontSize = rowIndex === 0 ? 14 : key.label.length > 2 ? 13 : 18;
             ctx.font = `500 ${fontSize}px -apple-system, "SF Pro Text", Inter, sans-serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
 
             if (key.label === "caps lock" || key.label === "tab" || key.label === "shift") {
               ctx.textAlign = "left";
-              ctx.fillText(key.label, currentX + 24, currentY + rowH / 2);
+              ctx.fillText(key.label, currentX + 9, currentY + rowH / 2);
             } else if (key.label === "return" || key.label === "delete") {
               ctx.textAlign = "right";
-              ctx.fillText(key.label, currentX + keyW - 24, currentY + rowH / 2);
+              ctx.fillText(key.label, currentX + keyW - 9, currentY + rowH / 2);
             } else {
               ctx.fillText(key.label, currentX + keyW / 2, currentY + rowH / 2);
             }
@@ -439,16 +439,27 @@ function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
 }
 
 // ============================================================================
-// Helper: Draw Wallpaper with Cover Fit, macOS Menu Bar & Notch (2560x1600 Native)
+// Helper: Draw Wallpaper with Cover Fit, macOS Menu Bar & Notch
+// Mobile: 1024×640 canvas (6× less GPU memory → faster load, sharper text)
+// Desktop: 2560×1600 canvas (full quality)
 // ============================================================================
 function createMacOSWallpaperTexture(
   imgUrl: string,
   maxAnisotropy = 16,
-  onReady?: () => void
+  onReady?: () => void,
+  isMobile = false
 ): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
-  canvas.width = 2560;
-  canvas.height = 1600;
+  // Mobile canvas is 1024×640 — ~6× less pixels than 2560×1600.
+  // Smaller texture = less mipmap downsampling = sharper text at mobile viewport sizes.
+  const cW = isMobile ? 1024 : 2560;
+  const cH = isMobile ? 640  : 1600;
+  canvas.width  = cW;
+  canvas.height = cH;
+
+  // Scale factor for all px measurements (relative to desktop 2560×1600 baseline)
+  const s = cW / 2560;
+
   const ctx = canvas.getContext("2d");
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -461,79 +472,117 @@ function createMacOSWallpaperTexture(
     img.onload = () => {
       if (!ctx) return;
 
-      // 1. Cover fit calculation directly at 2560x1600
+      // 1. Cover fit
       const imgAspect = img.width / img.height;
-      const canvasAspect = canvas.width / canvas.height;
+      const canvasAspect = cW / cH;
       let dw: number, dh: number, dx: number, dy: number;
 
       if (imgAspect > canvasAspect) {
-        dh = canvas.height;
-        dw = canvas.height * imgAspect;
-        dx = (canvas.width - dw) / 2;
+        dh = cH;
+        dw = cH * imgAspect;
+        dx = (cW - dw) / 2;
         dy = 0;
       } else {
-        dw = canvas.width;
-        dh = canvas.width / imgAspect;
+        dw = cW;
+        dh = cW / imgAspect;
         dx = 0;
-        dy = (canvas.height - dh) / 2;
+        dy = (cH - dh) / 2;
       }
-      // Fill canvas background with solid black bezel
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Clip wallpaper to rounded top corners (Apple Liquid Retina display style)
-      const topCornerRadius = 38;
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, cW, cH);
+
+      // Rounded top corners
+      const topR = Math.round(38 * s);
       ctx.save();
       ctx.beginPath();
-      ctx.moveTo(0, topCornerRadius);
-      ctx.arcTo(0, 0, topCornerRadius, 0, topCornerRadius); // Top-left rounded
-      ctx.lineTo(canvas.width - topCornerRadius, 0);
-      ctx.arcTo(canvas.width, 0, canvas.width, topCornerRadius, topCornerRadius); // Top-right rounded
-      ctx.lineTo(canvas.width, canvas.height); // Bottom-right 90° square
-      ctx.lineTo(0, canvas.height); // Bottom-left 90° square
+      ctx.moveTo(0, topR);
+      ctx.arcTo(0, 0, topR, 0, topR);
+      ctx.lineTo(cW - topR, 0);
+      ctx.arcTo(cW, 0, cW, topR, topR);
+      ctx.lineTo(cW, cH);
+      ctx.lineTo(0, cH);
       ctx.closePath();
       ctx.clip();
-
       ctx.drawImage(img, dx, dy, dw, dh);
       ctx.restore();
 
-      // 2. Transparent macOS-style Menu Bar (Prominent Size)
-      const barH = 82;
+      // 2. Menu bar — transparent, white text with shadows
+      // On mobile we use larger relative font sizes for crispness
+      const barH = Math.round(82 * s);
+      // Font sizes: on mobile boost by 1.5× relative to scale so they're legible
+      const fontBoost = isMobile ? 1.5 : 1.0;
+      const fontLg = Math.round(36 * s * fontBoost);  // Dharmik / Apple
+      const fontMd = Math.round(34 * s * fontBoost);  // Menus / Date
 
-      // Left items: Apple logo, Dharmik, Menus
       ctx.textBaseline = "middle";
+
+      // Apple logo via Path2D
+      const applePath = new Path2D(siApple.path);
+      const logoH = Math.round(34 * s * fontBoost);
+      const logoSc = logoH / 24;
+      const logoX = Math.round(38 * s);
+      const logoY = (barH - logoH) / 2;
+      ctx.save();
+      ctx.translate(logoX, logoY);
+      ctx.scale(logoSc, logoSc);
+      ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+      ctx.shadowBlur = Math.round(8 * s * fontBoost);
+      ctx.shadowOffsetY = 1;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+      ctx.fill(applePath);
+      ctx.restore();
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      // Dharmik
+      const dharmikX = Math.round((38 + 24 * logoSc + 10) * s);
+      ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
+      ctx.shadowBlur = Math.round(6 * s * fontBoost);
+      ctx.shadowOffsetY = 1;
       ctx.fillStyle = "#ffffff";
-      ctx.font = '500 36px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif';
-      ctx.fillText("", 48, barH / 2);
+      ctx.font = `700 ${fontLg}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
+      ctx.fillText("Dharmik", dharmikX + Math.round(logoH * 1.1), barH / 2);
 
-      ctx.font = '700 36px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif';
-      ctx.fillText("Dharmik", 102, barH / 2);
-
-      ctx.font = '400 34px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif';
-      ctx.fillStyle = "rgba(255, 255, 255, 0.90)";
+      // Menus
+      ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+      ctx.shadowBlur = Math.round(5 * s * fontBoost);
+      ctx.shadowOffsetY = 1;
+      ctx.font = `500 ${fontMd}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
       const menus = ["File", "Edit", "View", "Window", "Help"];
-      let menuX = 285;
+      // Measure Dharmik width to position menus correctly
+      ctx.font = `700 ${fontLg}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
+      const dharmikW = ctx.measureText("Dharmik").width;
+      ctx.font = `500 ${fontMd}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
+      let menuX = dharmikX + Math.round(logoH * 1.1) + dharmikW + Math.round(42 * s * fontBoost);
       for (const m of menus) {
         ctx.fillText(m, menuX, barH / 2);
-        menuX += ctx.measureText(m).width + 42;
+        menuX += ctx.measureText(m).width + Math.round(42 * s * fontBoost);
       }
 
-      // Right items: Date & Time
+      // Date & Time
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
       const dateStr = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
       const fullTimeStr = `${dateStr}  ${timeStr}`;
-
       ctx.textAlign = "right";
-      ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
-      ctx.fillText(fullTimeStr, canvas.width - 52, barH / 2);
+      ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+      ctx.shadowBlur = Math.round(5 * s * fontBoost);
+      ctx.shadowOffsetY = 1;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.font = `500 ${fontMd}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
+      ctx.fillText(fullTimeStr, cW - Math.round(52 * s), barH / 2);
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
 
-      // 3. Black rounded-bottom notch in the top center (drawn on top of wallpaper & menu bar)
-      const notchW = canvas.width * 0.13; // ~332px
-      const notchH = 98;
-      const notchR = 22;
-      const notchX = (canvas.width - notchW) / 2;
-
+      // 3. Notch
+      const notchW = cW * 0.143;
+      const notchH = Math.round(93 * s);
+      const notchR = Math.round(22 * s);
+      const notchX = (cW - notchW) / 2;
       ctx.fillStyle = "#000000";
       ctx.beginPath();
       ctx.moveTo(notchX, 0);
@@ -545,10 +594,10 @@ function createMacOSWallpaperTexture(
       ctx.closePath();
       ctx.fill();
 
-      // Camera lens dot inside notch
+      // Camera lens
       ctx.fillStyle = "#080e1a";
       ctx.beginPath();
-      ctx.arc(canvas.width / 2, notchH * 0.45, 9.5, 0, Math.PI * 2);
+      ctx.arc(cW / 2, notchH * 0.45, Math.round(9.5 * s), 0, Math.PI * 2);
       ctx.fill();
 
       texture.needsUpdate = true;
@@ -560,7 +609,7 @@ function createMacOSWallpaperTexture(
 }
 
 // ============================================================================
-// Helper: Draw Apple Boot Screen (2048x1390 Fixed Native Canvas)
+// Helper: Draw Apple Boot Screen (768x522 Fixed Native Canvas - reduced from 1024x696)
 // ============================================================================
 interface AnimatedBadgeController {
   texture: THREE.CanvasTexture;
@@ -569,8 +618,8 @@ interface AnimatedBadgeController {
 
 function createAnimatedBadge(maxAnisotropy = 16): AnimatedBadgeController {
   const canvas = document.createElement("canvas");
-  canvas.width = 2048;
-  canvas.height = 1390;
+  canvas.width = 768;
+  canvas.height = 522;
   const ctx = canvas.getContext("2d");
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -578,7 +627,7 @@ function createAnimatedBadge(maxAnisotropy = 16): AnimatedBadgeController {
 
   const applePath = new Path2D(siApple.path);
   const cx = canvas.width / 2;
-  let lastW = -1;
+  const lastWRef = { current: -1 };
 
   const update = (elapsed: number) => {
     if (!ctx) return;
@@ -593,29 +642,29 @@ function createAnimatedBadge(maxAnisotropy = 16): AnimatedBadgeController {
         ? 0.40 + (t - 0.25) * 0.45 
         : 0.58 + (t - 0.65) * 1.20;
 
-    const barW = 644;
-    const barH = 9.5;
+    const barW = 242;
+    const barH = 3.5;
     const currentW = Math.round(Math.max(barH, Math.min(barW, barW * fillFraction)) * 2) / 2;
 
     // Redraw only when progress actually updates (prevents redundant GPU texture uploads on static frames)
-    if (currentW === lastW) return;
-    lastW = currentW;
+    if (currentW === lastWRef.current) return;
+    lastWRef.current = currentW;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // 1. Large Top Apple Logo
     ctx.save();
-    const logoScale = 10.5;
-    const logoW = 24 * logoScale; // 252px
+    const logoScale = 3.94;
+    const logoW = 24 * logoScale; // ~95px
     const logoX = (canvas.width - logoW) / 2;
-    const logoY = 88;
+    const logoY = 33;
     ctx.translate(logoX, logoY);
     ctx.scale(logoScale, logoScale);
 
     // Crisp Apple logo with ambient drop shadow
     ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
-    ctx.shadowBlur = 35;
-    ctx.shadowOffsetY = 12;
+    ctx.shadowBlur = 13;
+    ctx.shadowOffsetY = 5;
     ctx.fillStyle = "#ffffff";
     ctx.fill(applePath);
     ctx.restore();
@@ -625,35 +674,35 @@ function createAnimatedBadge(maxAnisotropy = 16): AnimatedBadgeController {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // Title: Dk's MacBook (native font size for 2048px canvas)
+    // Title: Dk's MacBook (native font size for 768px canvas)
     ctx.fillStyle = "#ffffff";
-    ctx.font = '600 102px -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif';
+    ctx.font = '600 38px -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif';
     ctx.letterSpacing = "0.02em";
     ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
-    ctx.shadowBlur = 30;
-    ctx.shadowOffsetY = 8;
-    ctx.fillText("Dk's MacBook", cx, 760);
+    ctx.shadowBlur = 11;
+    ctx.shadowOffsetY = 3;
+    ctx.fillText("Dk's MacBook", cx, 285);
 
     // Subtitle: Available Soon (close to title)
     ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
-    ctx.font = '400 62px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif';
+    ctx.font = '400 23px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif';
     ctx.letterSpacing = "0.04em";
     ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 5;
-    ctx.fillText("Available Soon", cx, 856);
+    ctx.shadowBlur = 9;
+    ctx.shadowOffsetY = 2;
+    ctx.fillText("Available Soon", cx, 321);
     ctx.restore();
 
     // 3. Animated Progress Loading Bar (near the fonts below)
     ctx.save();
     const barR = barH / 2;
     const barX = (canvas.width - barW) / 2;
-    const barY = 988;
+    const barY = 370;
 
     // Dark translucent background track
     ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetY = 6;
+    ctx.shadowBlur = 7;
+    ctx.shadowOffsetY = 2;
     ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
     ctx.beginPath();
     ctx.roundRect(barX, barY, barW, barH, barR);
@@ -661,7 +710,7 @@ function createAnimatedBadge(maxAnisotropy = 16): AnimatedBadgeController {
 
     ctx.fillStyle = "#ffffff";
     ctx.shadowColor = "rgba(255, 255, 255, 0.5)";
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 5.5;
     ctx.beginPath();
     ctx.roundRect(barX, barY, currentW, barH, barR);
     ctx.fill();
@@ -684,22 +733,31 @@ function CameraController() {
   return null;
 }
 
-function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps) {
+function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }: SceneProps) {
   const laptopGroupRef = useRef<THREE.Group>(null);
   const lidNodeRef = useRef<THREE.Object3D | null>(null);
   const shadowGroupRef = useRef<THREE.Group>(null);
   const screenLightRef = useRef<THREE.PointLight>(null);
   const badgeControllerRef = useRef<AnimatedBadgeController | null>(null);
+  const shadowMeshRef = useRef<THREE.Mesh | null>(null);
 
   const [measurements, setMeasurements] = useState<ModelMeasurements | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   const { scene } = useGLTF(MODEL_PATH);
   const { size, gl } = useThree();
   const maxAnisotropy = gl.capabilities.getMaxAnisotropy();
 
+  // Pre-cache constants to avoid per-frame allocations
   const aspect = size.width / Math.max(1, size.height);
   const H = 2 * CAMERA_Z * Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
   const W = H * aspect;
+
+  // Mobile-specific render settings
+  const showBadgeAnimation = !isMobile; // Disable badge animation on mobile for performance
+  const shadowResolution = isMobile ? 64 : 128;
+  const contactShadowBlur = isMobile ? 1.5 : 2.4;
+  const envIntensityMobile = isMobile ? 0.4 : 0.7;
 
   // Auto-fit scale using OPEN laptop measurements (with prominent mobile fractions)
   const scale = useMemo(() => {
@@ -712,9 +770,16 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
     );
   }, [measurements, W, H, isMobile]);
 
+  // Pre-compute constant values for useFrame
+  const closedCenterYRef = useRef(0);
+  const openCenterYRef = useRef(0);
+  const startYRef = useRef(0);
+  const pxToWorldRef = useRef(H / (typeof window !== "undefined" ? window.innerHeight : 1));
+  const HRef = useRef(H);
+
   // Model preparation: Measure poses, add keyboard deck, Apple logo, display & chin
   useEffect(() => {
-    if (!scene || !laptopGroupRef.current) return;
+    if (!scene) return;
 
     // 0. Update GLB materials for Apple Midnight finish
     scene.traverse((child) => {
@@ -726,18 +791,16 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
             mat.color = new THREE.Color(MIDNIGHT_COLOR);
             mat.metalness = MIDNIGHT_METALNESS;
             mat.roughness = MIDNIGHT_ROUGHNESS;
-            mat.envMapIntensity = isMobile ? 0.45 : MIDNIGHT_ENV_INTENSITY;
+            mat.envMapIntensity = isMobile ? envIntensityMobile : MIDNIGHT_ENV_INTENSITY;
             mat.needsUpdate = true;
           } else if (mat.name === "blackmatte") {
             if (child.name === BODY_NODE_NAME) {
-              // Keyboard well and hinge trim on body
               mat.color = new THREE.Color(TRIM_COLOR);
               mat.roughness = 0.55;
               mat.metalness = 0.25;
               mat.envMapIntensity = isMobile ? 0.3 : 0.5;
               mat.needsUpdate = true;
             } else if (child.name === "back") {
-              // Apple logo mesh on back lid
               mat.color = new THREE.Color(LOGO_COLOR);
               mat.roughness = 0.12;
               mat.metalness = 0.5;
@@ -754,6 +817,7 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
     const lidNode = scene.getObjectByName(LID_NODE_NAME);
     const bodyNode = scene.getObjectByName(BODY_NODE_NAME);
     const group = laptopGroupRef.current;
+    if (!group) return;
 
     // 1. Measure open & closed pose
     if (lidNode) {
@@ -778,12 +842,20 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
       const closedCenter = new THREE.Vector3();
       closedBox.getCenter(closedCenter);
 
-      setMeasurements({
-        openSize,
-        openCenter,
-        closedSize,
-        closedCenter,
-      });
+      // Defer setState to avoid synchronous setState in effect warning
+      setTimeout(() => {
+        setMeasurements({
+          openSize,
+          openCenter,
+          closedSize,
+          closedCenter,
+        });
+      }, 0);
+
+      // Cache for useFrame
+      closedCenterYRef.current = -closedCenter.y * 0.14 + CENTER_Y_OFFSET; // temporary scale
+      openCenterYRef.current = -openCenter.y * 0.14 + CENTER_Y_OFFSET;
+      startYRef.current = -HRef.current / 2 - (closedCenter.y + closedSize.y / 2) * 0.14 + 45 * (HRef.current / (typeof window !== "undefined" ? window.innerHeight : 1));
 
       lidNodeRef.current = lidNode;
     }
@@ -809,7 +881,6 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
       kbMesh.name = "keyboardDeckPlane";
       kbMesh.renderOrder = RENDER_ORDER_KEYBOARD;
       kbMesh.rotation.x = -Math.PI / 2;
-      // Position offset along deck top normal (+0.0015)
       kbMesh.position.set(0, 0.0326 + OFFSET_KEYBOARD_NORMAL, KEYBOARD_POS_Z);
       bodyNode.add(kbMesh);
     }
@@ -819,10 +890,10 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
       const oldLogo = lidNode.getObjectByName("appleLidLogo");
       if (oldLogo) lidNode.remove(oldLogo);
 
-      const appleTexture = createAppleLogoTexture(maxAnisotropy);
+      const appleLogoTexture = createAppleLogoTexture(maxAnisotropy);
       const logoGeo = new THREE.PlaneGeometry(LOGO_SIZE, LOGO_SIZE);
       const logoMat = new THREE.MeshStandardMaterial({
-        map: appleTexture,
+        map: appleLogoTexture,
         transparent: true,
         roughness: LOGO_ROUGHNESS,
         metalness: LOGO_METALNESS,
@@ -836,7 +907,6 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
       const logoMesh = new THREE.Mesh(logoGeo, logoMat);
       logoMesh.name = "appleLidLogo";
       logoMesh.renderOrder = RENDER_ORDER_LOGO;
-      // Positioned precisely on the outer back surface of the aluminum lid
       logoMesh.rotation.set(Math.PI / 2, 0, LOGO_ROT_Z);
       logoMesh.position.set(0, LOGO_Y, LOGO_Z);
       lidNode.add(logoMesh);
@@ -850,10 +920,7 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
       const screenW = 30.375;
       const screenH = 19.627;
 
-      const wallpaperTexture = createMacOSWallpaperTexture(WALLPAPER_PATH, maxAnisotropy, () => {
-        ScrollTrigger.refresh();
-      });
-
+      const wallpaperTexture = createMacOSWallpaperTexture(WALLPAPER_PATH, maxAnisotropy, undefined, isMobile);
       const planeGeo = new THREE.PlaneGeometry(screenW, screenH);
       const planeMat = new THREE.MeshBasicMaterial({
         map: wallpaperTexture,
@@ -869,89 +936,106 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
       displayPlane.rotation.x = -Math.PI / 2;
       displayPlane.position.set(0, -0.422, -11.522);
 
-      // Subtle glossy glass gradient overlay
-      const glassMat = new THREE.MeshStandardMaterial({
-        color: "#ffffff",
-        transparent: true,
-        opacity: 0.05,
-        roughness: 0.08,
-        metalness: 0.15,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -1,
-      });
-      const glassPlane = new THREE.Mesh(planeGeo.clone(), glassMat);
-      glassPlane.name = "glassOverlayPlane";
-      glassPlane.renderOrder = RENDER_ORDER_GLASS;
-      glassPlane.position.set(0, 0, OFFSET_GLASS_NORMAL);
-      displayPlane.add(glassPlane);
+      // Subtle glossy glass gradient overlay - disable on mobile for performance
+      if (!isMobile) {
+        const glassMat = new THREE.MeshStandardMaterial({
+          color: "#ffffff",
+          transparent: true,
+          opacity: 0.05,
+          roughness: 0.08,
+          metalness: 0.15,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1,
+        });
+        const glassPlane = new THREE.Mesh(planeGeo.clone(), glassMat);
+        glassPlane.name = "glassOverlayPlane";
+        glassPlane.renderOrder = RENDER_ORDER_GLASS;
+        glassPlane.position.set(0, 0, OFFSET_GLASS_NORMAL);
+        displayPlane.add(glassPlane);
+      }
 
       // 5. Apple Boot Screen Display Mesh (Prominent Size)
-      const badgeController = createAnimatedBadge(maxAnisotropy);
-      badgeControllerRef.current = badgeController;
+      if (showBadgeAnimation) {
+        const badgeController = createAnimatedBadge(maxAnisotropy);
+        badgeControllerRef.current = badgeController;
 
-      const badgeW = 12.0;
-      const badgeH = 8.14;
-      const badgeGeo = new THREE.PlaneGeometry(badgeW, badgeH);
-      const badgeMat = new THREE.MeshBasicMaterial({
-        map: badgeController.texture,
-        transparent: true,
-        toneMapped: false,
-        side: THREE.FrontSide,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -2,
-        polygonOffsetUnits: -2,
-      });
-      const badgeMesh = new THREE.Mesh(badgeGeo, badgeMat);
-      badgeMesh.name = "showcaseBadge";
-      badgeMesh.renderOrder = RENDER_ORDER_BADGE;
-      badgeMesh.position.set(0, 0, OFFSET_BADGE_NORMAL);
-
-      displayPlane.add(badgeMesh);
+        const badgeW = 12.0;
+        const badgeH = 8.14;
+        const badgeGeo = new THREE.PlaneGeometry(badgeW, badgeH);
+        const badgeMat = new THREE.MeshBasicMaterial({
+          map: badgeController.texture,
+          transparent: true,
+          toneMapped: false,
+          side: THREE.FrontSide,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -2,
+        });
+        const badgeMesh = new THREE.Mesh(badgeGeo, badgeMat);
+        badgeMesh.name = "showcaseBadge";
+        badgeMesh.renderOrder = RENDER_ORDER_BADGE;
+        badgeMesh.position.set(0, 0, OFFSET_BADGE_NORMAL);
+        displayPlane.add(badgeMesh);
+      }
 
       lidNode.add(displayPlane);
     }
 
-    // Log one-time renderOrder & normal offset audit table
-    console.table([
-      { "layer name": "Base Body / Deck Mesh (body)", renderOrder: 0, depthWrite: true, offset: "0.0000" },
-      { "layer name": "Base Screen Bezel Mesh (matte)", renderOrder: 0, depthWrite: true, offset: "0.0000" },
-      { "layer name": "Desktop Wallpaper / Screen Overlay", renderOrder: RENDER_ORDER_BEZEL_SCREEN, depthWrite: true, offset: `+${OFFSET_SCREEN_NORMAL}` },
-      { "layer name": "Glass Specular Overlay", renderOrder: RENDER_ORDER_GLASS, depthWrite: false, offset: `+${(OFFSET_SCREEN_NORMAL + OFFSET_GLASS_NORMAL).toFixed(4)}` },
-      { "layer name": "Dk's Macbook Showcase Badge (Animated)", renderOrder: RENDER_ORDER_BADGE, depthWrite: false, offset: `+${(OFFSET_SCREEN_NORMAL + OFFSET_BADGE_NORMAL).toFixed(4)}` },
-      { "layer name": "Keyboard & Speaker Deck Overlay", renderOrder: RENDER_ORDER_KEYBOARD, depthWrite: false, offset: `+${OFFSET_KEYBOARD_NORMAL}` },
-      { "layer name": "Apple Lid Logo Overlay", renderOrder: RENDER_ORDER_LOGO, depthWrite: false, offset: `+${OFFSET_LOGO_NORMAL}` },
-    ]);
+    // Cache reference to shadow mesh for direct opacity updates (avoid traverse)
+    if (shadowGroupRef.current) {
+      shadowGroupRef.current.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          shadowMeshRef.current = child as THREE.Mesh;
+        }
+      });
+    }
 
+    // Mark as ready - this gates rendering
+    setIsReady(true);
     onModelLoaded();
-  }, [scene, onModelLoaded, isMobile, maxAnisotropy]);
+  }, [scene, onModelLoaded, isMobile, maxAnisotropy, showBadgeAnimation, envIntensityMobile]);
 
-  // Frame-by-frame update loop:
-  // 1. Sync rise with actual scroll distance (lockstep speed)
-  // 2. Keep open laptop visually centered (interpolating from closedCenter to openCenter)
-  // 3. Smooth power2.inOut lid opening
+  // Update cached values when measurements/scale change
+  useEffect(() => {
+    if (!measurements) return;
+    const s = scale;
+    closedCenterYRef.current = -measurements.closedCenter.y * s + CENTER_Y_OFFSET;
+    openCenterYRef.current = -measurements.openCenter.y * s + CENTER_Y_OFFSET;
+    startYRef.current = -HRef.current / 2 - (measurements.closedCenter.y + measurements.closedSize.y / 2) * s + 45 * pxToWorldRef.current;
+  }, [measurements, scale]);
+
+  // Update pxToWorld on resize
+  useEffect(() => {
+    const updatePxToWorld = () => {
+      pxToWorldRef.current = HRef.current / (window.innerHeight || 1);
+      if (measurements) {
+        startYRef.current = -HRef.current / 2 - (measurements.closedCenter.y + measurements.closedSize.y / 2) * scale + 45 * pxToWorldRef.current;
+      }
+    };
+    updatePxToWorld();
+    window.addEventListener("resize", updatePxToWorld, { passive: true });
+    return () => window.removeEventListener("resize", updatePxToWorld);
+  }, [measurements, scale]);
+
+  // Frame-by-frame update loop - heavily optimized
   useFrame((state) => {
-    // Continuously animate self-drawing line and badge graphics
-    if (badgeControllerRef.current) {
+    // Only update badge animation on desktop and when display lid is exposing the screen
+    if (showBadgeAnimation && badgeControllerRef.current && scrollProgressRef.current > 0.28) {
       badgeControllerRef.current.update(state.clock.elapsedTime);
     }
 
     if (!measurements || !laptopGroupRef.current) return;
 
     const progress = scrollProgressRef.current;
-    const scrollPx = typeof window !== "undefined" ? window.scrollY || document.documentElement.scrollTop || 0 : 0;
-    const windowH = typeof window !== "undefined" ? window.innerHeight || 1 : 1;
-    const pxToWorld = H / windowH;
-
-    // Centered positions with guaranteed margin
-    const closedCenterY = -measurements.closedCenter.y * scale + CENTER_Y_OFFSET;
-    const openCenterY = -measurements.openCenter.y * scale + CENTER_Y_OFFSET;
-
-    // Start position: only top of lid visible peeking at bottom (~45px)
-    const peekPx = 45;
-    const startY = -H / 2 - (measurements.closedCenter.y + measurements.closedSize.y / 2) * scale + peekPx * pxToWorld;
+    // Use cached scrollY ref — avoids expensive DOM read in hot render path (item 5)
+    const scrollPx = scrollYRef.current;
+    const pxToWorld = pxToWorldRef.current;
+    const closedCenterY = closedCenterYRef.current;
+    const openCenterY = openCenterYRef.current;
+    const startY = startYRef.current;
 
     // Rise phase driven 1:1 by actual scroll distance
     const riseWorldY = Math.min(closedCenterY, startY + scrollPx * pxToWorld);
@@ -964,7 +1048,6 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
     let screenGlow = 0;
 
     if (progress <= 0.30) {
-      // 0.00–0.30 (rise): Driven by actual scroll distance, moves at exact same speed as hero
       currentY = riseWorldY;
       const riseDist = Math.max(0.001, closedCenterY - startY);
       const riseT = Math.min(1, Math.max(0, (currentY - startY) / riseDist));
@@ -973,18 +1056,16 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
       shadowOp = riseT * 0.65;
       screenGlow = 0;
     } else if (progress <= 0.80) {
-      // 0.30–0.80 (open): Lid rotates open with power2.inOut, visual center stays put
       const openT = (progress - 0.30) / 0.50;
       const easeT = openT < 0.5 ? 2 * openT * openT : 1 - Math.pow(-2 * openT + 2, 2) / 2;
 
       currentLidRotX = THREE.MathUtils.lerp(LID_CLOSED_ROT, LID_OPEN_ROT, easeT);
       currentY = THREE.MathUtils.lerp(closedCenterY, openCenterY, easeT);
       currentRotX = CENTER_ROT_X;
-      currentZ = easeT * 0.3; // Push forward +0.3 for depth
+      currentZ = easeT * 0.3;
       shadowOp = 0.65;
       screenGlow = easeT * 0.4;
     } else {
-      // 0.80–1.00 (hold): Stays open and centered (clean hook: future screen-expand will replace this)
       currentLidRotX = LID_OPEN_ROT;
       currentY = openCenterY;
       currentRotX = CENTER_ROT_X;
@@ -993,7 +1074,7 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
       screenGlow = 0.4;
     }
 
-    // Direct ref updates
+    // Direct ref updates - no allocations
     laptopGroupRef.current.position.set(0, currentY, currentZ);
     laptopGroupRef.current.rotation.set(currentRotX, 0, 0);
     laptopGroupRef.current.scale.setScalar(scale);
@@ -1008,18 +1089,33 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
       screenLightRef.current.intensity = screenGlow;
     }
 
-    // Shadow updates
+    // Shadow updates - direct mesh reference instead of traverse
     if (shadowGroupRef.current) {
       shadowGroupRef.current.position.set(0, currentY - 0.05, currentZ);
-      shadowGroupRef.current.traverse((child) => {
-        if ((child as THREE.Mesh).isMesh && (child as THREE.Mesh).material) {
-          const mat = (child as THREE.Mesh).material as THREE.Material;
-          mat.opacity = shadowOp;
-          mat.transparent = true;
-        }
-      });
+      if (shadowMeshRef.current && shadowMeshRef.current.material) {
+        const mat = shadowMeshRef.current.material as THREE.Material;
+        mat.opacity = shadowOp;
+        mat.transparent = true;
+      }
     }
   });
+
+  // Only render scene after fully initialized - prevents loading glitch
+  // Render immediately once scene is available; isReady prevents glitch during setup
+  const shouldRender = isReady || !!scene;
+  if (!shouldRender) {
+    return (
+      <>
+        <CameraController />
+        <Environment preset="city" background={false} />
+        <ambientLight intensity={0.65} />
+        <directionalLight position={[0, 6, 6]} intensity={1.1} />
+        <pointLight position={[0, -2.5, -4]} color="#4A9EFF" intensity={1.8} distance={16} />
+        <directionalLight position={[0, 3, -5]} color="#4A9EFF" intensity={1.2} />
+        <pointLight ref={screenLightRef} color="#f0f6ff" intensity={0} distance={6} />
+      </>
+    );
+  }
 
   return (
     <>
@@ -1058,15 +1154,15 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
         <primitive object={scene} />
       </group>
 
-      {/* Soft ContactShadows under the laptop */}
+      {/* Soft ContactShadows under the laptop - lower resolution on mobile */}
       <group ref={shadowGroupRef}>
         <ContactShadows
           position={[0, 0, 0]}
           opacity={isMobile ? 0.5 : 0.65}
           scale={16.5}
-          blur={2.4}
+          blur={contactShadowBlur}
           far={4}
-          resolution={isMobile ? 128 : 256}
+          resolution={shadowResolution}
           color="#000000"
         />
       </group>
@@ -1077,6 +1173,9 @@ function MacbookModel({ scrollProgressRef, onModelLoaded, isMobile }: SceneProps
 export default function MacbookHero() {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef(0);
+  // Cache scrollY in a ref updated via passive scroll listener — avoids
+  // expensive window.scrollY DOM read inside the hot useFrame path (item 5)
+  const scrollYRef = useRef(0);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -1084,12 +1183,24 @@ export default function MacbookHero() {
       setIsMobile(window.innerWidth < 768);
     };
     checkMobile();
-    window.addEventListener("resize", checkMobile);
+    window.addEventListener("resize", checkMobile, { passive: true });
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  // Keep scrollYRef in sync via passive listener — no DOM read in render loop
+  useEffect(() => {
+    const onScroll = () => {
+      scrollYRef.current = window.scrollY;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const handleModelLoaded = React.useCallback(() => {
-    ScrollTrigger.refresh();
+    // Defer refresh to avoid layout thrash on model load
+    requestAnimationFrame(() => {
+      ScrollTrigger.refresh();
+    });
   }, []);
 
   // GSAP ScrollTrigger timeline driving progress (0 → 1) over a 300vh scroll container
@@ -1101,10 +1212,12 @@ export default function MacbookHero() {
         trigger: containerRef.current,
         start: "top top",
         end: "bottom bottom",
-        scrub: isMobile ? 0.5 : 1,
+        // scrub:0 on mobile = instant update, no deferred JS work per frame (item 5)
+        scrub: isMobile ? 0 : 1,
         onUpdate: (self) => {
           scrollProgressRef.current = self.progress;
         },
+        refreshPriority: 1,
       });
     }, containerRef.current || undefined);
 
@@ -1112,6 +1225,9 @@ export default function MacbookHero() {
       ctx.revert();
     };
   }, [isMobile]);
+
+  // DPR [1,2] on both — mobile uses 1024×640 wallpaper (6× smaller) so GPU headroom is fine
+  const canvasDpr = [1, 2] as [number, number];
 
   return (
     // Tall scroll wrapper (~300vh) driving the 3D scene animation
@@ -1124,11 +1240,12 @@ export default function MacbookHero() {
         <Canvas
           gl={{
             alpha: true,
-            antialias: true,
+            antialias: !isMobile, // Disable antialias on mobile for performance
             powerPreference: "high-performance",
+            preserveDrawingBuffer: false,
           }}
           style={{ background: "transparent" }}
-          dpr={[1, 2]}
+          dpr={canvasDpr}
           camera={{
             position: [CAMERA_X, CAMERA_Y, CAMERA_Z],
             fov: CAMERA_FOV,
@@ -1137,6 +1254,7 @@ export default function MacbookHero() {
           <Suspense fallback={null}>
             <MacbookModel
               scrollProgressRef={scrollProgressRef}
+              scrollYRef={scrollYRef}
               onModelLoaded={handleModelLoaded}
               isMobile={isMobile}
             />

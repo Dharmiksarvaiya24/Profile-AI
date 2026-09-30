@@ -8,29 +8,25 @@ const MacbookHero = dynamic(() => import("./MacbookHero"), {
   ssr: false,
 });
 
+// Preload GLB via drei cache at module level
+if (typeof window !== "undefined") {
+  // Preload via drei cache
+  if ("requestIdleCallback" in window) {
+    (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(() => {
+      useGLTF.preload("/mac.glb");
+    });
+  } else {
+    setTimeout(() => useGLTF.preload("/mac.glb"), 100);
+  }
+}
+
 export default function MacbookWrapper() {
   const [shouldRender, setShouldRender] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Idle preload of GLB model
-    const preloadModel = () => {
-      useGLTF.preload("/mac.glb");
-    };
-
-    if (typeof window !== "undefined") {
-      if ("requestIdleCallback" in window) {
-        (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(preloadModel);
-      } else {
-        setTimeout(preloadModel, 1200);
-      }
-    }
-
     // IntersectionObserver to only mount 3D Canvas when near viewport (800px margin)
-    if (!containerRef.current) {
-      setShouldRender(true);
-      return;
-    }
+    if (!containerRef.current) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
