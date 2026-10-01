@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 export interface MinimalTypewriterProps {
   texts?: string[];
@@ -36,10 +36,14 @@ interface DisplayChar {
   isScrambling: boolean;
 }
 
+const graphemeSegmenter =
+  typeof Intl !== "undefined" && "Segmenter" in Intl
+    ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
+    : null;
+
 function splitIntoGraphemes(text: string): string[] {
-  if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
-    const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-    return Array.from(segmenter.segment(text), (s) => s.segment);
+  if (graphemeSegmenter) {
+    return Array.from(graphemeSegmenter.segment(text), (s) => s.segment);
   }
   return Array.from(text);
 }
@@ -75,8 +79,13 @@ export function MinimalTypewriter({
   cursorWidth = "2px",
   characters = DEFAULT_MATRIX_CHARS,
 }: MinimalTypewriterProps) {
-  const sequence = texts ?? (firstText ? [firstText, ...(secondText ? [secondText] : [])] : DEFAULT_GREETINGS);
+  const sequence = useMemo(
+    () => texts ?? (firstText ? [firstText, ...(secondText ? [secondText] : [])] : DEFAULT_GREETINGS),
+    [texts, firstText, secondText]
+  );
 
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const [active, setActive] = useState(true);
   const [displayChars, setDisplayChars] = useState<DisplayChar[]>([]);
   const [phraseIndex, setPhraseIndex] = useState(0);
   const [phase, setPhase] = useState<
@@ -90,11 +99,31 @@ export function MinimalTypewriter({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const scrambleCounterRef = useRef<number>(0);
 
-  const getRandomChar = () => {
+  // Pause typing timers when scrolled away from viewport
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry) {
+          setTimeout(() => setActive(entry.isIntersecting), 0);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const getRandomChar = useCallback(() => {
     return characters[Math.floor(Math.random() * characters.length)];
-  };
+  }, [characters]);
 
   useEffect(() => {
+    if (!active) return;
+
     // Deliberate typewriter timing variations with clear decrypt visibility
     const getTypingDelay = () => 50 + Math.floor(Math.random() * 25);
 
@@ -123,7 +152,9 @@ export function MinimalTypewriter({
             }, scrambleSpeed);
           }
         } else {
-          setPhase("pause");
+          timerRef.current = setTimeout(() => {
+            setPhase("pause");
+          }, 0);
         }
       } else {
         const lastChar = displayChars[currentLength - 1];
@@ -167,7 +198,9 @@ export function MinimalTypewriter({
             }
           } else {
             // All characters revealed and resolved
-            setPhase("pause");
+            timerRef.current = setTimeout(() => {
+              setPhase("pause");
+            }, 0);
           }
         }
       }
@@ -196,7 +229,9 @@ export function MinimalTypewriter({
           }, deletingSpeed);
         }
       } else {
-        setPhase("pause-delete");
+        timerRef.current = setTimeout(() => {
+          setPhase("pause-delete");
+        }, 0);
       }
     } else if (phase === "pause-delete") {
       timerRef.current = setTimeout(() => {
@@ -218,7 +253,9 @@ export function MinimalTypewriter({
     pauseFirst,
     pauseSecond,
     deletingSpeed,
+    getRandomChar,
     characters,
+    active,
   ]);
 
   const textColor = phraseIndex % 2 === 0 ? firstColor : secondColor;
@@ -228,6 +265,7 @@ export function MinimalTypewriter({
 
   return (
     <span
+      ref={containerRef}
       className="inline-flex items-center justify-center select-none"
       role="text"
       aria-label={currentPhraseText}

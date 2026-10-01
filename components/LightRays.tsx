@@ -48,110 +48,100 @@ const getAnchorAndDir = (
   }
 };
 
-export interface LightRaysProps {
-  raysOrigin?: RaysOrigin;
-  raysColor?: string;
-  raysSpeed?: number;
-  lightSpread?: number;
-  rayLength?: number;
-  pulsating?: boolean;
-  fadeDistance?: number;
-  saturation?: number;
-  followMouse?: boolean;
-  mouseInfluence?: number;
-  noiseAmount?: number;
-  distortion?: number;
-  lightMode?: boolean;
-  className?: string;
+// Shader sources as module-level constants to avoid useEffect dependency warnings
+const MOBILE_FRAG = `precision mediump float;
+
+uniform float iTime;
+uniform vec2  iResolution;
+
+uniform vec2  rayPos;
+uniform vec2  rayDir;
+uniform vec3  raysColor;
+uniform float raysSpeed;
+uniform float lightSpread;
+uniform float rayLength;
+uniform float pulsating;
+uniform float fadeDistance;
+uniform float saturation;
+uniform vec2  mousePos;
+uniform float mouseInfluence;
+
+varying vec2 vUv;
+
+float rayStrength(vec2 raySource, vec2 rayRefDirection, vec2 coord,
+                  float seedA, float seedB, float speed) {
+  vec2 sourceToCoord = coord - raySource;
+  vec2 dirNorm = normalize(sourceToCoord);
+  float cosAngle = dot(dirNorm, rayRefDirection);
+
+  float spreadFactor = pow(max(cosAngle, 0.0), 1.0 / max(lightSpread, 0.001));
+
+  float distance = length(sourceToCoord);
+  float maxDim = max(iResolution.x, iResolution.y);
+  float maxDistance = maxDim * rayLength;
+  float lengthFalloff = clamp((maxDistance - distance) / maxDistance, 0.0, 1.0);
+  
+  float fadeFalloff = clamp((maxDim * fadeDistance - distance) / (maxDim * fadeDistance), 0.5, 1.0);
+  float pulse = pulsating > 0.5 ? (0.8 + 0.2 * sin(iTime * speed * 3.0)) : 1.0;
+
+  float baseStrength = clamp(
+    (0.45 + 0.15 * sin(cosAngle * seedA + iTime * speed)) +
+    (0.3 + 0.2 * cos(-cosAngle * seedB + iTime * speed)),
+    0.0, 1.0
+  );
+
+  return baseStrength * lengthFalloff * fadeFalloff * spreadFactor * pulse;
 }
 
-const LightRays = ({
-  raysOrigin = 'top-center',
-  raysColor = DEFAULT_COLOR,
-  raysSpeed = 1,
-  lightSpread = 1,
-  rayLength = 2,
-  pulsating = false,
-  fadeDistance = 1.0,
-  saturation = 1.0,
-  followMouse = false,
-  mouseInfluence = 0,
-  noiseAmount = 0.0,
-  distortion = 0.0,
-  lightMode = false,
-  className = '',
-}: LightRaysProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const uniformsRef = useRef<Record<string, { value: unknown }> | null>(null);
-  const rendererRef = useRef<Renderer | null>(null);
-  const mouseRef = useRef({ x: 0.5, y: 0.5 });
-  const smoothMouseRef = useRef({ x: 0.5, y: 0.5 });
-  const animationIdRef = useRef<number | null>(null);
-  const meshRef = useRef<Mesh | null>(null);
-  const cleanupFunctionRef = useRef<(() => void) | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
-  const observerRef = useRef<IntersectionObserver | null>(null);
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 coord = vec2(fragCoord.x, iResolution.y - fragCoord.y);
+  
+  vec2 finalRayPos = rayPos;
+  vec2 finalRayDir = rayDir;
+  if (mouseInfluence > 0.0) {
+    finalRayPos.x += (mousePos.x - 0.5) * iResolution.x * 0.25 * mouseInfluence;
+    vec2 mouseScreenPos = mousePos * iResolution.xy;
+    vec2 mouseDirection = normalize(mouseScreenPos - finalRayPos);
+    finalRayDir = normalize(mix(rayDir, mouseDirection, mouseInfluence));
+  }
 
-  useEffect(() => {
-    if (!containerRef.current) return;
+  vec4 rays1 = vec4(1.0) *
+               rayStrength(finalRayPos, finalRayDir, coord, 36.2214, 21.11349,
+                           1.5 * raysSpeed);
+  vec4 rays2 = vec4(1.0) *
+               rayStrength(finalRayPos, finalRayDir, coord, 22.3991, 18.0234,
+                           1.1 * raysSpeed);
 
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        setIsVisible(entry.isIntersecting);
-      },
-      { threshold: 0.1 }
-    );
+  fragColor = rays1 * 0.5 + rays2 * 0.4;
 
-    observerRef.current.observe(containerRef.current);
+  float brightness = 1.0 - (coord.y / iResolution.y);
+  fragColor.x *= 0.1 + brightness * 0.8;
+  fragColor.y *= 0.3 + brightness * 0.6;
+  fragColor.z *= 0.5 + brightness * 0.5;
 
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-        observerRef.current = null;
-      }
-    };
-  }, []);
+  if (saturation != 1.0) {
+    float gray = dot(fragColor.rgb, vec3(0.299, 0.587, 0.114));
+    fragColor.rgb = mix(vec3(gray), fragColor.rgb, saturation);
+  }
 
-  useEffect(() => {
-    if (!isVisible || !containerRef.current) return;
+  fragColor.rgb *= raysColor;
 
-    if (cleanupFunctionRef.current) {
-      cleanupFunctionRef.current();
-      cleanupFunctionRef.current = null;
-    }
+  if (lightMode > 0.5) {
+    vec3 mapped = vec3(1.0) - exp(-max(fragColor.rgb, vec3(0.0)) * 1.35);
+    float energy = clamp(max(mapped.r, max(mapped.g, mapped.b)), 0.0, 1.0);
+    vec3 hue = mapped / max(energy, 0.0001);
+    vec3 ink = mix(hue * 0.25, hue * 0.72, energy);
+    fragColor = vec4(mix(vec3(1.0), ink, energy), 1.0);
+  }
+}
 
-    const initializeWebGL = async () => {
-      if (!containerRef.current) return;
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      if (!containerRef.current) return;
-
-      const renderer = new Renderer({
-        dpr: Math.min(window.devicePixelRatio, 2),
-        alpha: true,
-      });
-      rendererRef.current = renderer;
-
-      const gl = renderer.gl;
-      gl.canvas.style.width = '100%';
-      gl.canvas.style.height = '100%';
-
-      while (containerRef.current.firstChild) {
-        containerRef.current.removeChild(containerRef.current.firstChild);
-      }
-      containerRef.current.appendChild(gl.canvas);
-
-      const vert = `
-attribute vec2 position;
-varying vec2 vUv;
 void main() {
-  vUv = position * 0.5 + 0.5;
-  gl_Position = vec4(position, 0.0, 1.0);
+  vec4 color;
+  mainImage(color, gl_FragCoord.xy);
+  gl_FragColor  = color;
 }`;
 
-      const frag = `precision highp float;
+const DESKTOP_FRAG = `precision highp float;
 
 uniform float iTime;
 uniform vec2  iResolution;
@@ -257,6 +247,120 @@ void main() {
   gl_FragColor  = color;
 }`;
 
+export interface LightRaysProps {
+  raysOrigin?: RaysOrigin;
+  raysColor?: string;
+  raysSpeed?: number;
+  lightSpread?: number;
+  rayLength?: number;
+  pulsating?: boolean;
+  fadeDistance?: number;
+  saturation?: number;
+  followMouse?: boolean;
+  mouseInfluence?: number;
+  noiseAmount?: number;
+  distortion?: number;
+  lightMode?: boolean;
+  // Mobile-only unused props (prefixed to avoid unused warnings)
+  _noiseAmount?: number;
+  _distortion?: number;
+  _lightMode?: boolean;
+  className?: string;
+}
+
+const LightRays = ({
+  raysOrigin = 'top-center',
+  raysColor = DEFAULT_COLOR,
+  raysSpeed = 1,
+  lightSpread = 1,
+  rayLength = 2,
+  pulsating = false,
+  fadeDistance = 1.0,
+  saturation = 1.0,
+  followMouse = false,
+  mouseInfluence = 0,
+  // Mobile: noiseAmount, distortion, lightMode are unused (disabled in mobile shader)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _noiseAmount = 0.0,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _distortion = 0.0,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _lightMode = false,
+  className = '',
+}: LightRaysProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const uniformsRef = useRef<Record<string, { value: unknown }> | null>(null);
+  const rendererRef = useRef<Renderer | null>(null);
+  const mouseRef = useRef({ x: 0.5, y: 0.5 });
+  const smoothMouseRef = useRef({ x: 0.5, y: 0.5 });
+  const animationIdRef = useRef<number | null>(null);
+const meshRef = useRef<Mesh | null>(null);
+  const cleanupFunctionRef = useRef<(() => void) | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        setIsVisible(entry.isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+
+    observerRef.current.observe(containerRef.current);
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible || !containerRef.current) return;
+
+    if (cleanupFunctionRef.current) {
+      cleanupFunctionRef.current();
+      cleanupFunctionRef.current = null;
+    }
+
+    const initializeWebGL = async () => {
+      if (!containerRef.current) return;
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      if (!containerRef.current) return;
+
+      const renderer = new Renderer({
+        dpr: isMobile ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2),
+        alpha: true,
+      });
+      rendererRef.current = renderer;
+
+      const gl = renderer.gl;
+      gl.canvas.style.width = '100%';
+      gl.canvas.style.height = '100%';
+
+      while (containerRef.current.firstChild) {
+        containerRef.current.removeChild(containerRef.current.firstChild);
+      }
+      containerRef.current.appendChild(gl.canvas);
+
+      const vert = `
+attribute vec2 position;
+varying vec2 vUv;
+void main() {
+  vUv = position * 0.5 + 0.5;
+  gl_Position = vec4(position, 0.0, 1.0);
+}`;
+
+      const frag = isMobile ? MOBILE_FRAG : DESKTOP_FRAG;
+
       const uniforms = {
         iTime: { value: 0 },
         iResolution: { value: [1, 1] },
@@ -264,16 +368,13 @@ void main() {
         rayDir: { value: [0, 1] },
         raysColor: { value: hexToRgb(raysColor) },
         raysSpeed: { value: raysSpeed },
-        lightSpread: { value: lightSpread },
-        rayLength: { value: rayLength },
+        lightSpread: { value: isMobile ? 1.2 : lightSpread },
+        rayLength: { value: isMobile ? 1.0 : rayLength },
         pulsating: { value: pulsating ? 1.0 : 0.0 },
         fadeDistance: { value: fadeDistance },
         saturation: { value: saturation },
         mousePos: { value: [0.5, 0.5] },
         mouseInfluence: { value: mouseInfluence },
-        noiseAmount: { value: noiseAmount },
-        distortion: { value: distortion },
-        lightMode: { value: lightMode ? 1.0 : 0.0 },
       };
       uniformsRef.current = uniforms;
 
@@ -289,7 +390,7 @@ void main() {
       const updatePlacement = () => {
         if (!containerRef.current || !renderer) return;
 
-        renderer.dpr = Math.min(window.devicePixelRatio, 2);
+        renderer.dpr = isMobile ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2);
 
         const { clientWidth: wCSS, clientHeight: hCSS } = containerRef.current;
         if (wCSS === 0 || hCSS === 0) return;
@@ -392,9 +493,7 @@ void main() {
     saturation,
     followMouse,
     mouseInfluence,
-    noiseAmount,
-    distortion,
-    lightMode,
+    isMobile,
   ]);
 
   useEffect(() => {
@@ -405,15 +504,12 @@ void main() {
 
     u.raysColor.value = hexToRgb(raysColor);
     u.raysSpeed.value = raysSpeed;
-    u.lightSpread.value = lightSpread;
-    u.rayLength.value = rayLength;
+    u.lightSpread.value = isMobile ? 1.2 : lightSpread;
+    u.rayLength.value = isMobile ? 1.0 : rayLength;
     u.pulsating.value = pulsating ? 1.0 : 0.0;
     u.fadeDistance.value = fadeDistance;
     u.saturation.value = saturation;
     u.mouseInfluence.value = mouseInfluence;
-    u.noiseAmount.value = noiseAmount;
-    u.distortion.value = distortion;
-    u.lightMode.value = lightMode ? 1.0 : 0.0;
 
     const { clientWidth: wCSS, clientHeight: hCSS } = containerRef.current;
     if (wCSS > 0 && hCSS > 0) {
@@ -432,12 +528,12 @@ void main() {
     fadeDistance,
     saturation,
     mouseInfluence,
-    noiseAmount,
-    distortion,
-    lightMode,
+    isMobile,
   ]);
 
   useEffect(() => {
+    if (isMobile) return; // Disable hover/touch tracking on mobile
+
     const handleMouseMove = (e: MouseEvent) => {
       if (!containerRef.current || !rendererRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
@@ -468,7 +564,7 @@ void main() {
         window.removeEventListener('touchmove', handleTouchMove);
       };
     }
-  }, [followMouse]);
+  }, [followMouse, isMobile]);
 
   return (
     <div
