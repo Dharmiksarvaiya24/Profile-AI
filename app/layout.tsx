@@ -4,6 +4,11 @@ import { Background } from "@/components/Background";
 
 export const metadata: Metadata = {
   title: "Dharmik Sarvaiya",
+  icons: {
+    icon: "/profile.jpg",
+    shortcut: "/profile.jpg",
+    apple: "/profile.jpg",
+  },
 };
 
 export default function RootLayout({
@@ -14,6 +19,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <link rel="icon" href="/profile.jpg" type="image/jpeg" />
+        <link rel="apple-touch-icon" href="/profile.jpg" />
         <link rel="preload" as="model" href="/mac.glb" type="model/gltf-binary" crossOrigin="anonymous" />
         <link rel="preload" as="image" href="/goldengate.jpg" type="image/jpeg" />
       </head>

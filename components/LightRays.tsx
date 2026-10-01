@@ -299,6 +299,33 @@ const meshRef = useRef<Mesh | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const isScrollingRef = useRef(false);
+  const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const handleScroll = () => {
+      isScrollingRef.current = true;
+      if (scrollEndTimerRef.current) {
+        clearTimeout(scrollEndTimerRef.current);
+      }
+      scrollEndTimerRef.current = setTimeout(() => {
+        isScrollingRef.current = false;
+      }, 120);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('touchmove', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('touchmove', handleScroll);
+      if (scrollEndTimerRef.current) {
+        clearTimeout(scrollEndTimerRef.current);
+      }
+    };
+  }, [isMobile]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -337,7 +364,7 @@ const meshRef = useRef<Mesh | null>(null);
       if (!containerRef.current) return;
 
       const renderer = new Renderer({
-        dpr: isMobile ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2),
+        dpr: isMobile ? 1.0 : Math.min(window.devicePixelRatio, 2),
         alpha: true,
       });
       rendererRef.current = renderer;
@@ -390,7 +417,7 @@ void main() {
       const updatePlacement = () => {
         if (!containerRef.current || !renderer) return;
 
-        renderer.dpr = isMobile ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2);
+        renderer.dpr = isMobile ? 1.0 : Math.min(window.devicePixelRatio, 2);
 
         const { clientWidth: wCSS, clientHeight: hCSS } = containerRef.current;
         if (wCSS === 0 || hCSS === 0) return;
@@ -407,8 +434,21 @@ void main() {
         uniforms.rayDir.value = dir;
       };
 
+      let lastRenderTime = 0;
+
       const loop = (t: number) => {
         if (!rendererRef.current || !uniformsRef.current || !meshRef.current) return;
+
+        // On mobile: regulate frame rate: 30 FPS normally (~33ms), 15 FPS during active scroll (~66ms)
+        // Desktop remains at full unthrottled display refresh rate
+        if (isMobile) {
+          const minInterval = isScrollingRef.current ? 66 : 33;
+          if (t - lastRenderTime < minInterval) {
+            animationIdRef.current = requestAnimationFrame(loop);
+            return;
+          }
+          lastRenderTime = t;
+        }
 
         uniforms.iTime.value = t * 0.001;
 
@@ -569,6 +609,10 @@ void main() {
   return (
     <div
       ref={containerRef}
+      style={{
+        contain: isMobile ? "strict" : undefined,
+        transform: isMobile ? "translateZ(0)" : undefined,
+      }}
       className={`relative w-full h-full pointer-events-none z-[3] overflow-hidden ${className}`.trim()}
     />
   );
