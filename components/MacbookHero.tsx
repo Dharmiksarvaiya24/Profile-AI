@@ -1,7 +1,7 @@
 "use client";
 
-import React, { Suspense, useEffect, useRef, useState, useMemo } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import React, { Suspense, useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { Canvas, useFrame, useThree, invalidate } from "@react-three/fiber";
 import { useGLTF, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import gsap from "gsap";
@@ -80,6 +80,33 @@ export const BODY_NODE_NAME = "body";
 export const MODEL_PATH = "/mac.glb";
 export const WALLPAPER_PATH = "/goldengate.jpg";
 
+// 7. Physical Lid Dimensions for Zoom Target Framing (all 4 bezels visible, keyboard excluded)
+export const TOTAL_LID_WIDTH = 31.48;
+export const TOTAL_LID_HEIGHT = 21.88;
+export const LID_CENTER_Y = 10.94; // Physical lid center in local space (21.88 / 2)
+
+function computeZoomTarget(viewportW: number, viewportH: number, isMob: boolean) {
+  // Match exact reference framing:
+  // Desktop display width fills ~74% of viewport width (matching Reference 2)
+  // Mobile display width fills ~92% of viewport width
+  const maxLidW = isMob ? 0.92 : 0.74;
+  const maxLidH = isMob ? 0.80 : 0.94;
+  const targetScale = Math.min(
+    (viewportW * maxLidW) / TOTAL_LID_WIDTH,
+    (viewportH * maxLidH) / TOTAL_LID_HEIGHT
+  );
+
+  // Position hinge below the viewport bottom so the keyboard/deck is completely pushed
+  // outside the viewport, while the bottom black bezel clearly frames the display.
+  // On mobile: center the lid vertically in the viewport.
+  const vBottom = CAMERA_TARGET_Y - viewportH / 2;
+  const targetGroupY = isMob
+    ? CAMERA_TARGET_Y - LID_CENTER_Y * targetScale
+    : vBottom - 0.038 * viewportH;
+
+  return { targetScale, targetGroupY, targetGroupZ: 0.45 };
+}
+
 interface ModelMeasurements {
   openSize: THREE.Vector3;
   openCenter: THREE.Vector3;
@@ -95,7 +122,7 @@ interface SceneProps {
 }
 
 // ============================================================================
-// Helper: Texture Configuration
+// Helper: Texture Configuration (mipmapped — for keyboard, logo etc.)
 // ============================================================================
 function configureCanvasTexture(
   texture: THREE.CanvasTexture,
@@ -103,6 +130,22 @@ function configureCanvasTexture(
 ): THREE.CanvasTexture {
   texture.generateMipmaps = true;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = maxAnisotropy;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+// Helper: Sharp Texture Configuration (no mipmaps — for the screen/wallpaper).
+// The screen mesh is viewed nearly head-on, so mipmap interpolation only adds
+// blur. LinearFilter at both min and mag stages gives pixel-perfect sharpness.
+function configureSharpTexture(
+  texture: THREE.CanvasTexture,
+  maxAnisotropy = 16
+): THREE.CanvasTexture {
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = maxAnisotropy;
@@ -440,8 +483,18 @@ function createKeyboardTexture(maxAnisotropy = 16): THREE.CanvasTexture {
 
 // ============================================================================
 // Helper: Draw Wallpaper with Cover Fit, macOS Menu Bar & Notch
-// Mobile: 1024×640 canvas (6× less GPU memory → faster load, sharper text)
-// Desktop: 2560×1600 canvas (full quality)
+//
+// Canvas sizing rationale (IMPORTANT — read before changing):
+//   On mobile the screen mesh (~30.375 wu) maps to roughly 450–500 screen pixels
+//   at DPR 2. A 2560px texture displayed at 450px forces WebGL to bilinear-sample
+//   only 4 of the ~5×5 source texels per output pixel (LinearFilter) — producing
+//   aliasing that looks like blur. The correct fix is to keep the canvas close to
+//   the display size and let mipmaps handle any residual downscaling.
+//
+//   Mobile: 1024×640 ≈ 2× the ~450×290 display pixels at DPR 2.
+//     Keeps glyphs at ~26px on the canvas (minimum ~12px for crisp canvas text).
+//     Mipmaps handle the clean 2:1 downscale without blur.
+//   Desktop: 2560×1600 for high-res displays.
 // ============================================================================
 function createMacOSWallpaperTexture(
   imgUrl: string,
@@ -450,18 +503,24 @@ function createMacOSWallpaperTexture(
   isMobile = false
 ): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
-  // Mobile canvas is 1024×640 — ~6× less pixels than 2560×1600.
-  // Smaller texture = less mipmap downsampling = sharper text at mobile viewport sizes.
+  // Mobile: 1024×640 — 2× the ~450×290 screen mesh display size at DPR 2.
+  // Glyphs draw at ~26px (crisp for canvas 2D). Mipmaps handle the 2:1
+  // downscale cleanly. 512×320 produced sub-10px glyphs that are
+  // inherently soft due to canvas 2D anti-aliasing at tiny sizes.
+  // Desktop: 2560×1600 for high-res displays.
   const cW = isMobile ? 1024 : 2560;
   const cH = isMobile ? 640  : 1600;
   canvas.width  = cW;
   canvas.height = cH;
 
-  // Scale factor for all px measurements (relative to desktop 2560×1600 baseline)
+  // Scale factor relative to 2560×1600 baseline
   const s = cW / 2560;
 
   const ctx = canvas.getContext("2d");
 
+  // Restore mipmaps: at near 1:1 scale they add no blur; for any residual
+  // downscaling they pre-compute the correct filtered output far better than
+  // LinearFilter alone at high scale ratios.
   const texture = new THREE.CanvasTexture(canvas);
   configureCanvasTexture(texture, maxAnisotropy);
 
@@ -471,6 +530,9 @@ function createMacOSWallpaperTexture(
     img.src = imgUrl;
     img.onload = () => {
       if (!ctx) return;
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
 
       // 1. Cover fit
       const imgAspect = img.width / img.height;
@@ -507,11 +569,12 @@ function createMacOSWallpaperTexture(
       ctx.drawImage(img, dx, dy, dw, dh);
       ctx.restore();
 
-      // 2. Menu bar — transparent, white text with shadows
-      // On mobile we use larger relative font sizes for crispness
+      // 2. Menu bar
       const barH = Math.round(82 * s);
-      // Font sizes: on mobile boost by 1.5× relative to scale so they're legible
-      const fontBoost = isMobile ? 1.5 : 1.0;
+      // fontBoost scales font px for the mobile 512px canvas (s=0.2).
+      // 2.0× → fontLg≈14px, fontMd≈14px on a 512px canvas ≈ real macOS bar proportions.
+      // Increase toward 3.0 to make text larger, decrease toward 1.5 to make it smaller.
+      const fontBoost = isMobile ? 1.3 : 1.0;
       const fontLg = Math.round(36 * s * fontBoost);  // Dharmik / Apple
       const fontMd = Math.round(34 * s * fontBoost);  // Menus / Date
 
@@ -526,9 +589,13 @@ function createMacOSWallpaperTexture(
       ctx.save();
       ctx.translate(logoX, logoY);
       ctx.scale(logoSc, logoSc);
-      ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
-      ctx.shadowBlur = Math.round(8 * s * fontBoost);
-      ctx.shadowOffsetY = 1;
+      // Skip shadow blur on mobile: canvas shadowBlur softens glyphs significantly
+      // on small canvases where blur radius is proportionally large.
+      if (!isMobile) {
+        ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+        ctx.shadowBlur = Math.round(8 * s);
+        ctx.shadowOffsetY = 1;
+      }
       ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
       ctx.fill(applePath);
       ctx.restore();
@@ -536,53 +603,75 @@ function createMacOSWallpaperTexture(
       ctx.shadowBlur = 0;
       ctx.shadowOffsetY = 0;
 
+      // ── Pre-compute notch geometry (needed for menu clipping below) ──────────
+      const notchW = cW * 0.143;
+      const notchH = Math.round(93 * s);
+      const notchR = Math.round(22 * s);
+      const notchX = (cW - notchW) / 2;       // left edge of notch
+      const notchRightX = notchX + notchW;     // right edge of notch
+      // Menu items must end at least this many px before the notch left edge
+      const notchGap = Math.round(16 * s);
+
       // Dharmik
       const dharmikX = Math.round((38 + 24 * logoSc + 10) * s);
-      ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
-      ctx.shadowBlur = Math.round(6 * s * fontBoost);
-      ctx.shadowOffsetY = 1;
+      if (!isMobile) {
+        ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
+        ctx.shadowBlur = Math.round(6 * s);
+        ctx.shadowOffsetY = 1;
+      }
       ctx.fillStyle = "#ffffff";
       ctx.font = `700 ${fontLg}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
       ctx.fillText("Dharmik", dharmikX + Math.round(logoH * 1.1), barH / 2);
 
-      // Menus
-      ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
-      ctx.shadowBlur = Math.round(5 * s * fontBoost);
-      ctx.shadowOffsetY = 1;
+      // Menus — skip any item whose right edge would overlap the notch
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      if (!isMobile) {
+        ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+        ctx.shadowBlur = Math.round(5 * s);
+        ctx.shadowOffsetY = 1;
+      }
       ctx.font = `500 ${fontMd}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
       ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
       const menus = ["File", "Edit", "View", "Window", "Help"];
-      // Measure Dharmik width to position menus correctly
       ctx.font = `700 ${fontLg}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
       const dharmikW = ctx.measureText("Dharmik").width;
       ctx.font = `500 ${fontMd}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
       let menuX = dharmikX + Math.round(logoH * 1.1) + dharmikW + Math.round(42 * s * fontBoost);
       for (const m of menus) {
+        const mW = ctx.measureText(m).width;
+        // Stop drawing if this menu item would touch or cross the notch
+        if (menuX + mW > notchX - notchGap) break;
         ctx.fillText(m, menuX, barH / 2);
-        menuX += ctx.measureText(m).width + Math.round(42 * s * fontBoost);
+        menuX += mW + Math.round(42 * s * fontBoost);
       }
 
-      // Date & Time
+      // Date & Time — only draw if it fits to the right of the notch
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
       const dateStr = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
       const fullTimeStr = `${dateStr}  ${timeStr}`;
-      ctx.textAlign = "right";
-      ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
-      ctx.shadowBlur = Math.round(5 * s * fontBoost);
-      ctx.shadowOffsetY = 1;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
       ctx.font = `500 ${fontMd}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
-      ctx.fillText(fullTimeStr, cW - Math.round(52 * s), barH / 2);
+      const timeW = ctx.measureText(fullTimeStr).width;
+      const timeX = cW - Math.round(52 * s);
+      // Only draw time if it doesn't overlap the right edge of the notch
+      if (timeX - timeW > notchRightX + notchGap) {
+        ctx.textAlign = "right";
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        if (!isMobile) {
+          ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+          ctx.shadowBlur = Math.round(5 * s);
+          ctx.shadowOffsetY = 1;
+        }
+        ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.fillText(fullTimeStr, timeX, barH / 2);
+      }
       ctx.shadowColor = "transparent";
       ctx.shadowBlur = 0;
       ctx.shadowOffsetY = 0;
 
-      // 3. Notch
-      const notchW = cW * 0.143;
-      const notchH = Math.round(93 * s);
-      const notchR = Math.round(22 * s);
-      const notchX = (cW - notchW) / 2;
+      // 3. Notch (drawn last — paints over any menu pixel that bleeds under it)
       ctx.fillStyle = "#000000";
       ctx.beginPath();
       ctx.moveTo(notchX, 0);
@@ -600,6 +689,7 @@ function createMacOSWallpaperTexture(
       ctx.arc(cW / 2, notchH * 0.45, Math.round(9.5 * s), 0, Math.PI * 2);
       ctx.fill();
 
+
       texture.needsUpdate = true;
       if (onReady) onReady();
     };
@@ -608,120 +698,7 @@ function createMacOSWallpaperTexture(
   return texture;
 }
 
-// ============================================================================
-// Helper: Draw Apple Boot Screen (768x522 Fixed Native Canvas - reduced from 1024x696)
-// ============================================================================
-interface AnimatedBadgeController {
-  texture: THREE.CanvasTexture;
-  update: (elapsed: number) => void;
-}
 
-function createAnimatedBadge(maxAnisotropy = 16): AnimatedBadgeController {
-  const canvas = document.createElement("canvas");
-  canvas.width = 768;
-  canvas.height = 522;
-  const ctx = canvas.getContext("2d");
-
-  const texture = new THREE.CanvasTexture(canvas);
-  configureCanvasTexture(texture, maxAnisotropy);
-
-  const applePath = new Path2D(siApple.path);
-  const cx = canvas.width / 2;
-  const lastWRef = { current: -1 };
-
-  const update = (elapsed: number) => {
-    if (!ctx) return;
-
-    // Loop duration 3.6s
-    const loopDuration = 3.6;
-    const t = (elapsed % loopDuration) / loopDuration;
-    // Multi-stage ease simulating authentic Apple OS boot loading
-    const fillFraction = t < 0.25 
-      ? t * 1.6 
-      : t < 0.65 
-        ? 0.40 + (t - 0.25) * 0.45 
-        : 0.58 + (t - 0.65) * 1.20;
-
-    const barW = 242;
-    const barH = 3.5;
-    const currentW = Math.round(Math.max(barH, Math.min(barW, barW * fillFraction)) * 2) / 2;
-
-    // Redraw only when progress actually updates (prevents redundant GPU texture uploads on static frames)
-    if (currentW === lastWRef.current) return;
-    lastWRef.current = currentW;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // 1. Large Top Apple Logo
-    ctx.save();
-    const logoScale = 3.94;
-    const logoW = 24 * logoScale; // ~95px
-    const logoX = (canvas.width - logoW) / 2;
-    const logoY = 33;
-    ctx.translate(logoX, logoY);
-    ctx.scale(logoScale, logoScale);
-
-    // Crisp Apple logo with ambient drop shadow
-    ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
-    ctx.shadowBlur = 13;
-    ctx.shadowOffsetY = 5;
-    ctx.fillStyle = "#ffffff";
-    ctx.fill(applePath);
-    ctx.restore();
-
-    // 2. Extra Wide Gap, followed by Centered Fonts (close together)
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    // Title: Dk's MacBook (native font size for 768px canvas)
-    ctx.fillStyle = "#ffffff";
-    ctx.font = '600 38px -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif';
-    ctx.letterSpacing = "0.02em";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
-    ctx.shadowBlur = 11;
-    ctx.shadowOffsetY = 3;
-    ctx.fillText("Dk's MacBook", cx, 285);
-
-    // Subtitle: Available Soon (close to title)
-    ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
-    ctx.font = '400 23px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif';
-    ctx.letterSpacing = "0.04em";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
-    ctx.shadowBlur = 9;
-    ctx.shadowOffsetY = 2;
-    ctx.fillText("Available Soon", cx, 321);
-    ctx.restore();
-
-    // 3. Animated Progress Loading Bar (near the fonts below)
-    ctx.save();
-    const barR = barH / 2;
-    const barX = (canvas.width - barW) / 2;
-    const barY = 370;
-
-    // Dark translucent background track
-    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
-    ctx.shadowBlur = 7;
-    ctx.shadowOffsetY = 2;
-    ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
-    ctx.beginPath();
-    ctx.roundRect(barX, barY, barW, barH, barR);
-    ctx.fill();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.shadowColor = "rgba(255, 255, 255, 0.5)";
-    ctx.shadowBlur = 5.5;
-    ctx.beginPath();
-    ctx.roundRect(barX, barY, currentW, barH, barR);
-    ctx.fill();
-    ctx.restore();
-
-    texture.needsUpdate = true;
-  };
-
-  update(0);
-  return { texture, update };
-}
 
 function CameraController() {
   const { camera } = useThree();
@@ -738,7 +715,6 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
   const lidNodeRef = useRef<THREE.Object3D | null>(null);
   const shadowGroupRef = useRef<THREE.Group>(null);
   const screenLightRef = useRef<THREE.PointLight>(null);
-  const badgeControllerRef = useRef<AnimatedBadgeController | null>(null);
   const shadowMeshRef = useRef<THREE.Mesh | null>(null);
 
   const [measurements, setMeasurements] = useState<ModelMeasurements | null>(null);
@@ -746,7 +722,8 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
 
   const { scene } = useGLTF(MODEL_PATH);
   const { size, gl } = useThree();
-  const maxAnisotropy = gl.capabilities.getMaxAnisotropy();
+  const rawAnisotropy = gl.capabilities.getMaxAnisotropy();
+  const maxAnisotropy = isMobile ? Math.min(rawAnisotropy, 4) : rawAnisotropy;
 
   // Pre-cache constants to avoid per-frame allocations
   const aspect = size.width / Math.max(1, size.height);
@@ -754,7 +731,6 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
   const W = H * aspect;
 
   // Mobile-specific render settings
-  const showBadgeAnimation = !isMobile; // Disable badge animation on mobile for performance
   const shadowResolution = isMobile ? 64 : 128;
   const contactShadowBlur = isMobile ? 1.5 : 2.4;
   const envIntensityMobile = isMobile ? 0.4 : 0.7;
@@ -774,6 +750,9 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
   const closedCenterYRef = useRef(0);
   const openCenterYRef = useRef(0);
   const startYRef = useRef(0);
+  const targetScaleRef = useRef(0.18);
+  const targetGroupYRef = useRef(0);
+  const targetGroupZRef = useRef(0.45);
   const pxToWorldRef = useRef(H / (typeof window !== "undefined" ? window.innerHeight : 1));
   const HRef = useRef(H);
 
@@ -842,6 +821,37 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
       const closedCenter = new THREE.Vector3();
       closedBox.getCenter(closedCenter);
 
+      // Compute accurate scale and initial position for current viewport
+      const maxW = isMobile ? MAX_W_FRAC_MOBILE : MAX_W_FRAC;
+      const maxH = isMobile ? MAX_H_FRAC_MOBILE : MAX_H_FRAC;
+      const initialScale = Math.min(
+        (W * maxW) / openSize.x,
+        (H * maxH) / openSize.y
+      );
+
+      const pxToWorld = pxToWorldRef.current;
+      const closedCenterY = -closedCenter.y * initialScale + CENTER_Y_OFFSET;
+      const openCenterY = -openCenter.y * initialScale + CENTER_Y_OFFSET;
+      const startY = -HRef.current / 2 - (closedCenter.y + closedSize.y / 2) * initialScale + 45 * pxToWorld;
+
+      // Cache for useFrame
+      closedCenterYRef.current = closedCenterY;
+      openCenterYRef.current = openCenterY;
+      startYRef.current = startY;
+
+      // Position group and lid at exact bottom peek position immediately (prevents drop-from-top glitch)
+      group.position.set(0, startY, 0);
+      group.rotation.set(START_ROT_X, 0, 0);
+      group.scale.setScalar(initialScale);
+      lidNode.rotation.x = LID_CLOSED_ROT;
+      group.updateMatrixWorld(true);
+
+      if (shadowGroupRef.current) {
+        shadowGroupRef.current.position.set(0, startY - 0.05, 0);
+      }
+
+      lidNodeRef.current = lidNode;
+
       // Defer setState to avoid synchronous setState in effect warning
       setTimeout(() => {
         setMeasurements({
@@ -851,13 +861,6 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
           closedCenter,
         });
       }, 0);
-
-      // Cache for useFrame
-      closedCenterYRef.current = -closedCenter.y * 0.14 + CENTER_Y_OFFSET; // temporary scale
-      openCenterYRef.current = -openCenter.y * 0.14 + CENTER_Y_OFFSET;
-      startYRef.current = -HRef.current / 2 - (closedCenter.y + closedSize.y / 2) * 0.14 + 45 * (HRef.current / (typeof window !== "undefined" ? window.innerHeight : 1));
-
-      lidNodeRef.current = lidNode;
     }
 
     // 2. Keyboard on the deck (expanded width matching MacBook Pro proportions)
@@ -920,7 +923,9 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
       const screenW = 30.375;
       const screenH = 19.627;
 
-      const wallpaperTexture = createMacOSWallpaperTexture(WALLPAPER_PATH, maxAnisotropy, undefined, isMobile);
+      // Pass raw (uncapped) anisotropy to the wallpaper texture so mobile screen
+      // fonts are as sharp as possible regardless of the global mobile cap.
+      const wallpaperTexture = createMacOSWallpaperTexture(WALLPAPER_PATH, rawAnisotropy, undefined, isMobile);
       const planeGeo = new THREE.PlaneGeometry(screenW, screenH);
       const planeMat = new THREE.MeshBasicMaterial({
         map: wallpaperTexture,
@@ -956,32 +961,20 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
         displayPlane.add(glassPlane);
       }
 
-      // 5. Apple Boot Screen Display Mesh (Prominent Size)
-      if (showBadgeAnimation) {
-        const badgeController = createAnimatedBadge(maxAnisotropy);
-        badgeControllerRef.current = badgeController;
-
-        const badgeW = 12.0;
-        const badgeH = 8.14;
-        const badgeGeo = new THREE.PlaneGeometry(badgeW, badgeH);
-        const badgeMat = new THREE.MeshBasicMaterial({
-          map: badgeController.texture,
-          transparent: true,
-          toneMapped: false,
-          side: THREE.FrontSide,
-          depthWrite: false,
-          polygonOffset: true,
-          polygonOffsetFactor: -2,
-          polygonOffsetUnits: -2,
-        });
-        const badgeMesh = new THREE.Mesh(badgeGeo, badgeMat);
-        badgeMesh.name = "showcaseBadge";
-        badgeMesh.renderOrder = RENDER_ORDER_BADGE;
-        badgeMesh.position.set(0, 0, OFFSET_BADGE_NORMAL);
-        displayPlane.add(badgeMesh);
-      }
-
       lidNode.add(displayPlane);
+
+      // Compute final zoom framing targets (keyboard excluded, all 4 bezels preserved)
+      const zoomTarget = computeZoomTarget(W, H, isMobile);
+      targetScaleRef.current = zoomTarget.targetScale;
+      targetGroupYRef.current = zoomTarget.targetGroupY;
+      targetGroupZRef.current = zoomTarget.targetGroupZ;
+
+      // Restore lid and group to initial closed bottom-peek pose
+      lidNode.rotation.x = LID_CLOSED_ROT;
+      group.position.set(0, startYRef.current, 0);
+      group.rotation.set(START_ROT_X, 0, 0);
+      group.scale.setScalar(scale);
+      group.updateMatrixWorld(true);
     }
 
     // Cache reference to shadow mesh for direct opacity updates (avoid traverse)
@@ -996,7 +989,14 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
     // Mark as ready - this gates rendering
     setIsReady(true);
     onModelLoaded();
-  }, [scene, onModelLoaded, isMobile, maxAnisotropy, showBadgeAnimation, envIntensityMobile]);
+  }, [scene, onModelLoaded, isMobile, maxAnisotropy, envIntensityMobile, W, H]);
+
+  // On mobile: request render frame when ready or measurements change
+  useEffect(() => {
+    if (isReady && isMobile) {
+      invalidate();
+    }
+  }, [isReady, isMobile]);
 
   // Update cached values when measurements/scale change
   useEffect(() => {
@@ -1005,7 +1005,16 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
     closedCenterYRef.current = -measurements.closedCenter.y * s + CENTER_Y_OFFSET;
     openCenterYRef.current = -measurements.openCenter.y * s + CENTER_Y_OFFSET;
     startYRef.current = -HRef.current / 2 - (measurements.closedCenter.y + measurements.closedSize.y / 2) * s + 45 * pxToWorldRef.current;
-  }, [measurements, scale]);
+
+    const zoomTarget = computeZoomTarget(W, H, isMobile);
+    targetScaleRef.current = zoomTarget.targetScale;
+    targetGroupYRef.current = zoomTarget.targetGroupY;
+    targetGroupZRef.current = zoomTarget.targetGroupZ;
+
+    if (isMobile) {
+      invalidate();
+    }
+  }, [measurements, scale, isMobile, W, H]);
 
   // Update pxToWorld on resize
   useEffect(() => {
@@ -1021,12 +1030,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
   }, [measurements, scale]);
 
   // Frame-by-frame update loop - heavily optimized
-  useFrame((state) => {
-    // Only update badge animation on desktop and when display lid is exposing the screen
-    if (showBadgeAnimation && badgeControllerRef.current && scrollProgressRef.current > 0.28) {
-      badgeControllerRef.current.update(state.clock.elapsedTime);
-    }
-
+  useFrame(() => {
     if (!measurements || !laptopGroupRef.current) return;
 
     const progress = scrollProgressRef.current;
@@ -1040,44 +1044,65 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
     // Rise phase driven 1:1 by actual scroll distance
     const riseWorldY = Math.min(closedCenterY, startY + scrollPx * pxToWorld);
 
+    const baseShadowOp = isMobile ? 0.5 : 0.65;
     let currentY: number;
     let currentLidRotX: number;
     let currentRotX: number;
     let currentZ = 0;
+    let currentScale = scale;
     let shadowOp = 0;
     let screenGlow = 0;
 
-    if (progress <= 0.30) {
+    if (progress <= 0.28) {
+      // 0.00–0.28: Rise phase driven 1:1 by actual scroll distance
       currentY = riseWorldY;
       const riseDist = Math.max(0.001, closedCenterY - startY);
       const riseT = Math.min(1, Math.max(0, (currentY - startY) / riseDist));
       currentRotX = THREE.MathUtils.lerp(START_ROT_X, CENTER_ROT_X, riseT);
       currentLidRotX = LID_CLOSED_ROT;
-      shadowOp = riseT * 0.65;
+      currentScale = scale;
+      currentZ = 0;
+      shadowOp = riseT * baseShadowOp;
       screenGlow = 0;
-    } else if (progress <= 0.80) {
-      const openT = (progress - 0.30) / 0.50;
+    } else if (progress <= 0.68) {
+      // 0.28–0.68: Lid opening phase (smoothly opens to fully open MacBook)
+      const openT = (progress - 0.28) / 0.40;
       const easeT = openT < 0.5 ? 2 * openT * openT : 1 - Math.pow(-2 * openT + 2, 2) / 2;
 
       currentLidRotX = THREE.MathUtils.lerp(LID_CLOSED_ROT, LID_OPEN_ROT, easeT);
       currentY = THREE.MathUtils.lerp(closedCenterY, openCenterY, easeT);
       currentRotX = CENTER_ROT_X;
       currentZ = easeT * 0.3;
-      shadowOp = 0.65;
+      currentScale = scale;
+      shadowOp = baseShadowOp;
       screenGlow = easeT * 0.4;
-    } else {
+    } else if (progress <= 0.74) {
+      // 0.68–0.74: Hold open MacBook state (Reference Image 2)
       currentLidRotX = LID_OPEN_ROT;
       currentY = openCenterY;
       currentRotX = CENTER_ROT_X;
       currentZ = 0.3;
-      shadowOp = 0.65;
+      currentScale = scale;
+      shadowOp = baseShadowOp;
       screenGlow = 0.4;
+    } else {
+      // 0.74–1.00: Screen Expansion phase into close-up state (Reference Image 1)
+      const ep = Math.min(1, Math.max(0, (progress - 0.74) / 0.20)); // reaches 1.0 at 0.94, holds 0.94-1.00
+      const expandT = ep < 0.5 ? 2 * ep * ep : 1 - Math.pow(-2 * ep + 2, 2) / 2;
+
+      currentLidRotX = THREE.MathUtils.lerp(LID_OPEN_ROT, Math.PI / 2, expandT);
+      currentY = THREE.MathUtils.lerp(openCenterY, targetGroupYRef.current, expandT);
+      currentRotX = CENTER_ROT_X;
+      currentZ = THREE.MathUtils.lerp(0.3, targetGroupZRef.current, expandT);
+      currentScale = THREE.MathUtils.lerp(scale, targetScaleRef.current, expandT);
+      shadowOp = THREE.MathUtils.lerp(baseShadowOp, 0.0, expandT);
+      screenGlow = THREE.MathUtils.lerp(0.4, 0.0, expandT);
     }
 
     // Direct ref updates - no allocations
     laptopGroupRef.current.position.set(0, currentY, currentZ);
     laptopGroupRef.current.rotation.set(currentRotX, 0, 0);
-    laptopGroupRef.current.scale.setScalar(scale);
+    laptopGroupRef.current.scale.setScalar(currentScale);
 
     if (lidNodeRef.current) {
       lidNodeRef.current.rotation.x = currentLidRotX;
@@ -1100,8 +1125,9 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
     }
   });
 
-  // Only render scene after fully initialized - prevents loading glitch
-  // Render immediately once scene is available; isReady prevents glitch during setup
+  // Only return early (lights only) when completely uninitialized — for both mobile and desktop.
+  // On mobile: the group itself must always mount so laptopGroupRef.current is non-null when
+  // the setup useEffect runs to measure and position the model. Visibility is controlled below.
   const shouldRender = isReady || !!scene;
   if (!shouldRender) {
     return (
@@ -1116,6 +1142,11 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
       </>
     );
   }
+
+  // On mobile: hide the model until it has been positioned at its correct bottom-peek
+  // starting coordinate. This prevents the 1-frame "drop from top" glitch without
+  // blocking the group from mounting (which would cause measurements to never be set).
+  const modelVisible = !isMobile || (isReady && !!measurements);
 
   return (
     <>
@@ -1149,13 +1180,20 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
         distance={6}
       />
 
-      {/* Laptop Group */}
-      <group ref={laptopGroupRef} dispose={null}>
+      {/* Laptop Group — always mounted so ref is available for measurement */}
+      <group
+        ref={laptopGroupRef}
+        dispose={null}
+        visible={modelVisible}
+      >
         <primitive object={scene} />
       </group>
 
-      {/* Soft ContactShadows under the laptop - lower resolution on mobile */}
-      <group ref={shadowGroupRef}>
+      {/* Soft ContactShadows under the laptop - baked to 1 frame on mobile */}
+      <group
+        ref={shadowGroupRef}
+        visible={modelVisible}
+      >
         <ContactShadows
           position={[0, 0, 0]}
           opacity={isMobile ? 0.5 : 0.65}
@@ -1163,6 +1201,8 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
           blur={contactShadowBlur}
           far={4}
           resolution={shadowResolution}
+          frames={isMobile ? (isReady && !!measurements ? 1 : 0) : undefined}
+          smooth={!isMobile}
           color="#000000"
         />
       </group>
@@ -1178,30 +1218,69 @@ export default function MacbookHero() {
   const scrollYRef = useRef(0);
   const [isMobile, setIsMobile] = useState(false);
 
+  // References for mobile demand-driven scroll rendering pump
+  const scrollPumpActiveRef = useRef(false);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerMobileScrollRender = useCallback(() => {
+    if (!isMobile) return;
+    invalidate();
+    if (!scrollPumpActiveRef.current) {
+      scrollPumpActiveRef.current = true;
+      requestAnimationFrame(function pump() {
+        invalidate();
+        if (scrollPumpActiveRef.current) {
+          requestAnimationFrame(pump);
+        }
+      });
+    }
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      scrollPumpActiveRef.current = false;
+      invalidate(); // Ensure the final settled position is rendered
+    }, 120);
+  }, [isMobile]);
+
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        invalidate();
+      }
     };
     checkMobile();
     window.addEventListener("resize", checkMobile, { passive: true });
-    return () => window.removeEventListener("resize", checkMobile);
+    return () => {
+      window.removeEventListener("resize", checkMobile);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
   }, []);
 
-  // Keep scrollYRef in sync via passive listener — no DOM read in render loop
+  // Keep scrollYRef in sync via passive listener — triggers frame pump on mobile
   useEffect(() => {
     const onScroll = () => {
       scrollYRef.current = window.scrollY;
+      if (isMobile) {
+        triggerMobileScrollRender();
+      }
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [isMobile, triggerMobileScrollRender]);
 
   const handleModelLoaded = React.useCallback(() => {
     // Defer refresh to avoid layout thrash on model load
     requestAnimationFrame(() => {
       ScrollTrigger.refresh();
+      if (isMobile) {
+        invalidate();
+      }
     });
-  }, []);
+  }, [isMobile]);
 
   // GSAP ScrollTrigger timeline driving progress (0 → 1) over a 300vh scroll container
   useEffect(() => {
@@ -1216,6 +1295,9 @@ export default function MacbookHero() {
         scrub: isMobile ? 0 : 1,
         onUpdate: (self) => {
           scrollProgressRef.current = self.progress;
+          if (isMobile) {
+            triggerMobileScrollRender();
+          }
         },
         refreshPriority: 1,
       });
@@ -1224,10 +1306,13 @@ export default function MacbookHero() {
     return () => {
       ctx.revert();
     };
-  }, [isMobile]);
+  }, [isMobile, triggerMobileScrollRender]);
 
-  // DPR [1,2] on both — mobile uses 1024×640 wallpaper (6× smaller) so GPU headroom is fine
-  const canvasDpr = [1, 2] as [number, number];
+  // Desktop: [1, 2] (untouched).
+  // Mobile: [1, 2] — cap at 2× so a 3× screen renders at 2× rather than 1.5×.
+  // The extra fill-rate cost of going 1.5→2 is modest (~33% more pixels on the
+  // fraction of frames that actually render) but the sharpness gain is large.
+  const canvasDpr = (isMobile ? [1, 2] : [1, 2]) as [number, number];
 
   return (
     // Tall scroll wrapper (~300vh) driving the 3D scene animation
@@ -1235,12 +1320,17 @@ export default function MacbookHero() {
       {/* Fixed transparent canvas layered over ASCII background */}
       <div
         className="fixed inset-0 w-full h-[100dvh] pointer-events-none z-10 overflow-hidden"
-        style={{ background: "transparent" }}
+        style={{
+          background: "transparent",
+          contain: isMobile ? "strict" : undefined,
+          transform: isMobile ? "translateZ(0)" : undefined,
+        }}
       >
         <Canvas
+          frameloop={isMobile ? "demand" : "always"}
           gl={{
             alpha: true,
-            antialias: !isMobile, // Disable antialias on mobile for performance
+            antialias: true, // Keep antialias on mobile — cheapest way to sharpen
             powerPreference: "high-performance",
             preserveDrawingBuffer: false,
           }}

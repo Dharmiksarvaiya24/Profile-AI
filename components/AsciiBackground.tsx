@@ -141,6 +141,22 @@ export function AsciiBackground({
     initGrid();
     draw();
 
+    // Mobile scroll suppression: defer heavy 1100-character canvas redraws during active scroll
+    const isScrollingRef = { current: false };
+    let scrollTimeout: ReturnType<typeof setTimeout>;
+    const handleScroll = () => {
+      isScrollingRef.current = true;
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        isScrollingRef.current = false;
+        scheduleDraw();
+      }, 120);
+    };
+
+    if (isMobile) {
+      window.addEventListener("scroll", handleScroll, { passive: true });
+    }
+
     // Mutation ticker — increased by 20% (item 4)
     const intervalId = setInterval(() => {
       if (document.hidden || !isVisibleRef.current) return;
@@ -152,7 +168,10 @@ export function AsciiBackground({
           grid[r][c] = charSet[Math.floor(Math.random() * charSet.length)];
         }
       }
-      scheduleDraw();
+      // On mobile: defer canvas redraw if user is actively scrolling
+      if (!isMobile || !isScrollingRef.current) {
+        scheduleDraw();
+      }
     }, mutationInterval);
 
     // Hover listeners — desktop only (item 1: smooth pointer-based hover)
@@ -208,11 +227,14 @@ export function AsciiBackground({
     return () => {
       clearInterval(intervalId);
       clearTimeout(resizeTimeout);
+      clearTimeout(scrollTimeout);
       cancelAnimationFrame(animFrameRef.current);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (!isMobile) {
         window.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerleave", handlePointerLeave);
+      } else {
+        window.removeEventListener("scroll", handleScroll);
       }
       window.removeEventListener("resize", handleResize);
       if (observer) observer.disconnect();
@@ -226,6 +248,7 @@ export function AsciiBackground({
     <canvas
       ref={canvasRef}
       className={`pointer-events-none select-none ${className}`}
+      style={{ contain: "strict" }}
       aria-hidden="true"
     />
   );

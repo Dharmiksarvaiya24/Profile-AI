@@ -340,6 +340,9 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
           },
           { threshold: 0.1 }
         );
+        if (canvas) {
+          observerRef.current.observe(canvas);
+        }
       }
     };
 
@@ -384,6 +387,11 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
 };
 
 export default function ScrollIndicator({ className = "" }: { className?: string }) {
+  const [isMobile] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth < 768 || navigator.maxTouchPoints > 0;
+  });
+
   const handleScroll = () => {
     window.scrollBy({
       top: window.innerHeight * 0.85,
@@ -400,7 +408,12 @@ export default function ScrollIndicator({ className = "" }: { className?: string
         className={`${monoFont.className} group relative inline-flex items-center justify-center text-xs sm:text-[13px] font-medium tracking-wide text-[#175fab] hover:text-[#60a5fa] transition-colors duration-300 cursor-pointer select-none bg-transparent border-0`}
       >
         <span className="relative flex items-center justify-center drop-shadow-[0_0_12px_rgba(56,189,248,0.6)]">
-          <FuzzyText baseIntensity={0.1} hoverIntensity={0.66} enableHover>
+          <FuzzyText
+            baseIntensity={0.1}
+            hoverIntensity={0.66}
+            enableHover={!isMobile}
+            fps={isMobile ? 30 : 60}
+          >
             Scroll
           </FuzzyText>
         </span>
