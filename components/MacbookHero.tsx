@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useRef, useState, useMemo, useCallback } from "react";
+import MacDock, { ScreenRect } from "./MacDock";
 import { Canvas, useFrame, useThree, invalidate } from "@react-three/fiber";
 import { useGLTF, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
@@ -119,6 +120,7 @@ interface SceneProps {
   scrollYRef: React.MutableRefObject<number>;
   onModelLoaded: () => void;
   isMobile: boolean;
+  screenRectRef: React.MutableRefObject<ScreenRect | null>;
 }
 
 // ============================================================================
@@ -710,12 +712,20 @@ function CameraController() {
   return null;
 }
 
-function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }: SceneProps) {
+function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, screenRectRef }: SceneProps) {
   const laptopGroupRef = useRef<THREE.Group>(null);
   const lidNodeRef = useRef<THREE.Object3D | null>(null);
   const shadowGroupRef = useRef<THREE.Group>(null);
   const screenLightRef = useRef<THREE.PointLight>(null);
   const shadowMeshRef = useRef<THREE.Mesh | null>(null);
+  const displayPlaneRef = useRef<THREE.Mesh | null>(null);
+
+  // Reusable vectors for screen projection (zero-alloc in hot path)
+  const _projVec = useMemo(() => new THREE.Vector3(), []);
+  const _projCorners = useMemo(() => [
+    new THREE.Vector3(), new THREE.Vector3(),
+    new THREE.Vector3(), new THREE.Vector3(),
+  ], []);
 
   const [measurements, setMeasurements] = useState<ModelMeasurements | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -936,6 +946,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
         polygonOffsetUnits: -1,
       });
       const displayPlane = new THREE.Mesh(planeGeo, planeMat);
+      displayPlaneRef.current = displayPlane;
       displayPlane.name = "macOSDisplayPlane";
       displayPlane.renderOrder = RENDER_ORDER_BEZEL_SCREEN;
       displayPlane.rotation.x = -Math.PI / 2;
@@ -1030,7 +1041,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
   }, [measurements, scale]);
 
   // Frame-by-frame update loop - heavily optimized
-  useFrame(() => {
+  useFrame(({ camera }) => {
     if (!measurements || !laptopGroupRef.current) return;
 
     const progress = scrollProgressRef.current;
@@ -1121,6 +1132,71 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile }
         const mat = shadowMeshRef.current.material as THREE.Material;
         mat.opacity = shadowOp;
         mat.transparent = true;
+      }
+    }
+
+    // ── Project display plane corners to CSS screen coordinates for MacDock ──
+    if (displayPlaneRef.current && screenRectRef) {
+      const dp = displayPlaneRef.current;
+      dp.updateMatrixWorld(true);
+
+      // Display plane is 30.375 × 19.627, centered at origin in its local space
+      const hw = 30.375 / 2;
+      const hh = 19.627 / 2;
+
+      // 4 corners in local plane coords (plane is rotated -PI/2 around X)
+      // Local space of displayPlane: X right, Y into screen (after rotation), Z up (after rotation)
+      // Actually since PlaneGeometry vertices are in XY and the plane has rotation.x = -PI/2,
+      // the local XY maps to world XZ. We need the world positions of the 4 corners.
+      const corners = _projCorners;
+      corners[0].set(-hw, -hh, 0); // bottom-left in local plane
+      corners[1].set( hw, -hh, 0); // bottom-right
+      corners[2].set(-hw,  hh, 0); // top-left
+      corners[3].set( hw,  hh, 0); // top-right
+
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+
+      const canvasW = size.width;
+      const canvasH = size.height;
+
+      for (let i = 0; i < 4; i++) {
+        // Transform local corner to world, then project to NDC
+        _projVec.copy(corners[i]);
+        dp.localToWorld(_projVec);
+        _projVec.project(camera);
+
+        // NDC (-1..1) to CSS pixels
+        const sx = ( _projVec.x * 0.5 + 0.5) * canvasW;
+        const sy = (-_projVec.y * 0.5 + 0.5) * canvasH;
+
+        if (sx < minX) minX = sx;
+        if (sx > maxX) maxX = sx;
+        if (sy < minY) minY = sy;
+        if (sy > maxY) maxY = sy;
+      }
+
+      // Determine visibility: screen should be sufficiently open (lid > ~45°)
+      // The lid is fully open when progress > 0.48 (midpoint of open phase)
+      const dockVisible = progress > 0.48 && (maxX - minX) > 30;
+
+      const sr = screenRectRef.current;
+      if (!sr) {
+        screenRectRef.current = {
+          left: minX,
+          top: minY,
+          width: maxX - minX,
+          height: maxY - minY,
+          scale: currentScale / scale,
+          visible: dockVisible,
+        };
+      } else {
+        sr.left = minX;
+        sr.top = minY;
+        sr.width = maxX - minX;
+        sr.height = maxY - minY;
+        sr.scale = currentScale / scale;
+        sr.visible = dockVisible;
       }
     }
   });
@@ -1216,6 +1292,7 @@ export default function MacbookHero() {
   // Cache scrollY in a ref updated via passive scroll listener — avoids
   // expensive window.scrollY DOM read inside the hot useFrame path (item 5)
   const scrollYRef = useRef(0);
+  const screenRectRef = useRef<ScreenRect | null>(null);
   const [isMobile, setIsMobile] = useState(false);
 
   // References for mobile demand-driven scroll rendering pump
@@ -1347,9 +1424,11 @@ export default function MacbookHero() {
               scrollYRef={scrollYRef}
               onModelLoaded={handleModelLoaded}
               isMobile={isMobile}
+              screenRectRef={screenRectRef}
             />
           </Suspense>
         </Canvas>
+        <MacDock screenRectRef={screenRectRef} isMobile={isMobile} />
       </div>
     </div>
   );
