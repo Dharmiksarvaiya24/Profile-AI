@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 
 // ============================================================================
 // MacDock — Premium macOS Liquid Glass Dock
@@ -15,6 +15,7 @@ import React, { useEffect, useRef, useCallback } from "react";
 //  - No React state for pointer movement
 //  - GPU-composited transforms only (translate3d + scale)
 //  - Pointer capability detection: hover logic skipped on touch devices
+//  - Runtime PNG normalization: measured ONCE per image, cached, zero RAF overhead
 //  - Cleanup: all listeners removed on unmount
 // ============================================================================
 
@@ -29,31 +30,199 @@ export interface ScreenRect {
   visible: boolean;
 }
 
-// ── App definitions using real icons from /public/dock/ ──────────────────────
+// ── App definitions (the 6 macOS apps) ───────────────────────────────────────
 
 interface DockApp {
   id: string;
   label: string;
   src: string;
   href?: string;
-  /** Optical scale factor to ensure all icons have balanced perceived size */
-  scale?: number;
+  isSquircle?: boolean;
 }
 
 const DOCK_APPS: DockApp[] = [
-  { id: "finder",   label: "Projects",       src: "/dock/finder.png",   scale: 1.04 },
-  { id: "linkedin", label: "LinkedIn",     src: "/dock/linkedin.svg", scale: 0.88, href: "https://linkedin.com" },
-  { id: "github",   label: "GitHub",       src: "/dock/github.svg",   scale: 0.88, href: "https://github.com" },
-  { id: "siri-ai",  label: "Dharmik AI",   src: "/dock/siri.png",     scale: 1.18 },
-  { id: "pages",    label: "Education",    src: "/dock/pages.png",    scale: 1.00 },
-  { id: "trash",    label: "Trash",        src: "/dock/trash.png",    scale: 0.95 },
+  { id: "finder",   label: "Projects",     src: "/dock/finder.png",   isSquircle: true },
+  { id: "mail",     label: "Mail",         src: "/dock/mail.png",     isSquircle: true, href: "mailto:dharmik.be@gmail.com" },
+  { id: "linkedin", label: "LinkedIn",     src: "/dock/linkedin.png", isSquircle: true, href: "https://www.linkedin.com/in/dharmiksarvaiya/" },
+  { id: "github",   label: "GitHub",       src: "/dock/github.png",   isSquircle: true, href: "https://github.com/Dharmiksarvaiya24/" },
+  { id: "siri-ai",  label: "Dharmik AI",   src: "/dock/siri.png",     isSquircle: false },
+  { id: "pages",    label: "Education",    src: "/dock/pages.png",    isSquircle: true },
+  { id: "trash",    label: "Trash",        src: "/dock/trash.png",    isSquircle: false },
 ];
 
 // ── Dock dimensions & magnification constants ───────────────────────────────
-const BASE_ICON_SIZE = 40;     // px — compact base icon size for a smaller dock
+const BASE_ICON_SIZE = 40;     // px — compact base icon box size
+const TARGET_ARTWORK_PX = 34;  // px — identical target visible artwork bounding size (85% fill)
 const MAX_SCALE = 1.30;        // subtle, smooth magnification
 const INFLUENCE_RANGE = 1.85;  // neighbor influence range
 const LIFT_PX = 5;             // max upward lift in px
+
+// ── Runtime PNG Artwork Normalization & Caching ─────────────────────────────
+interface NormalizedArtwork {
+  scale: number;
+  translateX: number;
+  translateY: number;
+}
+
+// Precomputed exact artwork bounds measured from source PNG files (alpha > 15)
+// Guarantees instant accurate scale and zero-flicker on first render without relying solely on canvas.
+const PRECOMPUTED_BOUNDS: Record<string, { w: number; h: number; minX: number; minY: number; maxX: number; maxY: number }> = {
+  "/dock/finder.png":   { w: 872, h: 872, minX: 16, minY: 14, maxX: 856, maxY: 856 },
+  "/dock/mail.png":     { w: 462, h: 462, minX: 0,  minY: 0,  maxX: 461, maxY: 461 },
+  "/dock/linkedin.png": { w: 512, h: 512, minX: 0,  minY: 0,  maxX: 511, maxY: 511 },
+  "/dock/github.png":   { w: 512, h: 512, minX: 0,  minY: 0,  maxX: 511, maxY: 511 },
+  "/dock/siri.png":     { w: 148, h: 148, minX: 13, minY: 19, maxX: 135, maxY: 139 },
+  "/dock/pages.png":    { w: 320, h: 320, minX: 1,  minY: 2,  maxX: 319, maxY: 319 },
+  "/dock/trash.png":    { w: 128, h: 128, minX: 18, minY: 14, maxX: 112, maxY: 121 },
+};
+
+function computeArtworkTransform(
+  w: number,
+  h: number,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number
+): NormalizedArtwork {
+  const artW = Math.max(1, maxX - minX + 1);
+  const artH = Math.max(1, maxY - minY + 1);
+  const artCenterX = (minX + maxX + 1) / 2;
+  const artCenterY = (minY + maxY + 1) / 2;
+
+  // Visual size of artwork if image were rendered at 100% in BASE_ICON_SIZE (40px)
+  const visibleArtSizeAt100 = (Math.max(artW, artH) / Math.max(w, h)) * BASE_ICON_SIZE;
+  const scale = TARGET_ARTWORK_PX / Math.max(0.1, visibleArtSizeAt100);
+
+  // Shift needed to center non-transparent artwork in the icon box
+  const translateX = ((w / 2 - artCenterX) / w) * BASE_ICON_SIZE * scale;
+  const translateY = ((h / 2 - artCenterY) / h) * BASE_ICON_SIZE * scale;
+
+  return { scale, translateX, translateY };
+}
+
+const normCache = new Map<string, NormalizedArtwork>();
+
+// Seed cache with precomputed values
+for (const [path, b] of Object.entries(PRECOMPUTED_BOUNDS)) {
+  normCache.set(path, computeArtworkTransform(b.w, b.h, b.minX, b.minY, b.maxX, b.maxY));
+}
+
+// Untainted asynchronous analyzer for dynamic or updated PNGs
+async function analyzeDynamicPNG(src: string): Promise<NormalizedArtwork> {
+  const pathname = src.startsWith("http") ? new URL(src).pathname : src;
+  if (normCache.has(pathname)) return normCache.get(pathname)!;
+  if (normCache.has(src)) return normCache.get(src)!;
+
+  try {
+    const res = await fetch(src);
+    const blob = await res.blob();
+    const bitmap = await createImageBitmap(blob);
+    const w = bitmap.width;
+    const h = bitmap.height;
+
+    const maxDim = 120;
+    const s = Math.min(1, maxDim / Math.max(w, h));
+    const sw = Math.max(1, Math.round(w * s));
+    const sh = Math.max(1, Math.round(h * s));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return computeArtworkTransform(w, h, 0, 0, w - 1, h - 1);
+
+    ctx.drawImage(bitmap, 0, 0, sw, sh);
+    const imgData = ctx.getImageData(0, 0, sw, sh).data;
+
+    let minX = sw, maxX = -1, minY = sh, maxY = -1;
+    for (let y = 0; y < sh; y++) {
+      for (let x = 0; x < sw; x++) {
+        const alpha = imgData[(y * sw + x) * 4 + 3];
+        if (alpha > 15) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      return computeArtworkTransform(w, h, 0, 0, w - 1, h - 1);
+    }
+
+    const realMinX = (minX / sw) * w;
+    const realMaxX = ((maxX + 1) / sw) * w - 1;
+    const realMinY = (minY / sh) * h;
+    const realMaxY = ((maxY + 1) / sh) * h - 1;
+
+    const result = computeArtworkTransform(w, h, realMinX, realMinY, realMaxX, realMaxY);
+    normCache.set(pathname, result);
+    normCache.set(src, result);
+    return result;
+  } catch {
+    const fallback = computeArtworkTransform(512, 512, 0, 0, 511, 511);
+    normCache.set(pathname, fallback);
+    return fallback;
+  }
+}
+
+// ── Normalized Icon Component ───────────────────────────────────────────────
+const NormalizedIcon = React.memo(function NormalizedIcon({
+  src,
+  alt,
+  isSquircle,
+}: {
+  src: string;
+  alt: string;
+  isSquircle?: boolean;
+}) {
+  const [norm, setNorm] = useState<NormalizedArtwork>(() => {
+    return normCache.get(src) || computeArtworkTransform(512, 512, 0, 0, 511, 511);
+  });
+
+  useEffect(() => {
+    let active = true;
+    analyzeDynamicPNG(src).then((res) => {
+      if (active) setNorm(res);
+    });
+    return () => {
+      active = false;
+    };
+  }, [src]);
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        borderRadius: isSquircle ? "22%" : "0",
+        overflow: "visible",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+      }}
+    >
+      <img
+        src={src}
+        alt={alt}
+        crossOrigin="anonymous"
+        draggable={false}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          userSelect: "none",
+          pointerEvents: "none",
+          transformOrigin: "center center",
+          transform: `translate3d(${norm.translateX.toFixed(2)}px, ${norm.translateY.toFixed(2)}px, 0) scale(${norm.scale.toFixed(3)})`,
+          willChange: "transform",
+        }}
+      />
+    </div>
+  );
+});
 
 // ── MacDock Component ────────────────────────────────────────────────────────
 
@@ -88,7 +257,7 @@ export default function MacDock({ screenRectRef, isMobile }: MacDockProps) {
     const dockScale = Math.min(1.05, Math.max(0.3, rect.width / refWidth));
 
     // Position: bottom center of the screen rect, sitting close to the bottom bezel
-    const bottomPadding = rect.height * 0.018; // moved lower toward bottom edge
+    const bottomPadding = rect.height * 0.018;
     const dockBottom = rect.top + rect.height - bottomPadding;
     const dockCenterX = rect.left + rect.width / 2;
 
@@ -116,6 +285,8 @@ export default function MacDock({ screenRectRef, isMobile }: MacDockProps) {
   }, [updatePosition]);
 
   // ── Hover magnification (desktop only, direct DOM) ─────────────────────
+  // Multiplies with the inner normalizedBaseScale:
+  // finalScale = normalizedBaseScale * existingHoverScale
   useEffect(() => {
     if (isMobile) return;
     if (typeof window !== "undefined" && !window.matchMedia("(hover: hover)").matches) return;
@@ -204,7 +375,7 @@ export default function MacDock({ screenRectRef, isMobile }: MacDockProps) {
       aria-label="macOS Dock"
       role="toolbar"
     >
-      {/* Dock glass container — Sleek & Compact Liquid Glass */}
+      {/* Dock glass container — Sleek & Compact Liquid Glass (UNCHANGED) */}
       <div
         style={{
           display: "flex",
@@ -250,6 +421,7 @@ export default function MacDock({ screenRectRef, isMobile }: MacDockProps) {
                 aria-hidden="true"
               />
             )}
+            {/* Dock item — identical fixed outer container */}
             <div
               ref={(el) => {
                 itemRefs.current[index] = el;
@@ -257,7 +429,11 @@ export default function MacDock({ screenRectRef, isMobile }: MacDockProps) {
               data-dock-item={app.id}
               onClick={() => {
                 if (app.href) {
-                  window.open(app.href, "_blank", "noopener,noreferrer");
+                  if (app.href.startsWith("mailto:")) {
+                    window.location.href = app.href;
+                  } else {
+                    window.open(app.href, "_blank", "noopener,noreferrer");
+                  }
                 }
               }}
               style={{
@@ -273,34 +449,27 @@ export default function MacDock({ screenRectRef, isMobile }: MacDockProps) {
               role="button"
               aria-label={app.label}
             >
-              {/* Icon Container */}
+              {/* Fixed alignment box */}
               <div
                 style={{
                   width: "100%",
                   height: "100%",
-                  borderRadius: app.id === "trash" ? "0" : "22%",
-                  overflow: app.id === "trash" ? "visible" : "hidden",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  position: "relative",
+                  pointerEvents: "none",
                   filter:
                     app.id === "trash"
                       ? "none"
-                      : "drop-shadow(0 1.5px 3px rgba(0,0,0,0.3))",
+                      : "drop-shadow(0 1.5px 3px rgba(0,0,0,0.28))",
                 }}
               >
-                <img
+                {/* Normalized icon artwork — normalized to identical visual size */}
+                <NormalizedIcon
                   src={app.src}
                   alt={app.label}
-                  draggable={false}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                    userSelect: "none",
-                    pointerEvents: "none",
-                    transform: app.scale ? `scale(${app.scale})` : undefined,
-                  }}
+                  isSquircle={app.isSquircle}
                 />
               </div>
 
