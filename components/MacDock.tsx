@@ -230,9 +230,24 @@ export interface MacDockProps {
   /** Ref that MacbookHero writes screen rect into every frame */
   screenRectRef: React.MutableRefObject<ScreenRect | null>;
   isMobile: boolean;
+  onOpenEducation?: () => void;
+  isEducationOpen?: boolean;
+  onOpenSiri?: () => void;
+  isSiriOpen?: boolean;
+  onOpenProjects?: () => void;
+  isProjectsOpen?: boolean;
 }
 
-export default function MacDock({ screenRectRef, isMobile }: MacDockProps) {
+export default function MacDock({
+  screenRectRef,
+  isMobile,
+  onOpenEducation,
+  isEducationOpen,
+  onOpenSiri,
+  isSiriOpen,
+  onOpenProjects,
+  isProjectsOpen,
+}: MacDockProps) {
   const dockRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const rafIdRef = useRef<number | null>(null);
@@ -252,9 +267,10 @@ export default function MacDock({ screenRectRef, isMobile }: MacDockProps) {
     dock.style.opacity = "1";
     dock.style.pointerEvents = "auto";
 
-    // Compact dock scaling
+    // Compact dock scaling with screen boundary protection
     const refWidth = 540;
-    const dockScale = Math.min(1.05, Math.max(0.3, rect.width / refWidth));
+    const maxFitScale = (rect.width * 0.90) / 360;
+    const dockScale = Math.min(1.05, Math.max(0.25, Math.min(rect.width / refWidth, maxFitScale)));
 
     // Position: bottom center of the screen rect, sitting close to the bottom bezel
     const bottomPadding = rect.height * 0.018;
@@ -434,6 +450,12 @@ export default function MacDock({ screenRectRef, isMobile }: MacDockProps) {
                   } else {
                     window.open(app.href, "_blank", "noopener,noreferrer");
                   }
+                } else if (app.id === "pages") {
+                  onOpenEducation?.();
+                } else if (app.id === "siri-ai") {
+                  onOpenSiri?.();
+                } else if (app.id === "finder") {
+                  onOpenProjects?.();
                 }
               }}
               style={{
@@ -471,6 +493,26 @@ export default function MacDock({ screenRectRef, isMobile }: MacDockProps) {
                   alt={app.label}
                   isSquircle={app.isSquircle}
                 />
+
+                {/* macOS running app indicator dot */}
+                {((app.id === "pages" && isEducationOpen) ||
+                  (app.id === "siri-ai" && isSiriOpen) ||
+                  (app.id === "finder" && isProjectsOpen)) && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "-5px",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      width: "3.5px",
+                      height: "3.5px",
+                      borderRadius: "50%",
+                      backgroundColor: "rgba(255, 255, 255, 0.85)",
+                      boxShadow: "0 0 3px rgba(255, 255, 255, 0.6)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
               </div>
 
               {/* Tooltip — shown on hover via CSS sibling selector */}
