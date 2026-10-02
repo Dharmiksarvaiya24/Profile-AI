@@ -34,7 +34,7 @@ export default function Home() {
           {/* Typewriter Text on top with locked container height to prevent layout shift */}
           <div className="flex items-center justify-center h-12 sm:h-18 md:h-18 lg:h-20 -translate-y-16 sm:translate-y-0">
             <h1
-              className={`${arcadeFont.className} text-[28px] sm:text-2xl md:text-[28px] lg:text-[40px] tracking-wider leading-none drop-shadow-[0_4px_16px_rgba(255,255,255,0.15)] whitespace-nowrap`}
+              className={`${arcadeFont.className} text-[20px] xs:text-[24px] sm:text-2xl md:text-[28px] lg:text-[40px] tracking-wider leading-none drop-shadow-[0_4px_16px_rgba(255,255,255,0.15)] whitespace-nowrap`}
             >
               <MinimalTypewriter />
             </h1>

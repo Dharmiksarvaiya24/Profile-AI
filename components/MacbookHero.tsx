@@ -2,6 +2,9 @@
 
 import React, { Suspense, useEffect, useRef, useState, useMemo, useCallback } from "react";
 import MacDock, { ScreenRect } from "./MacDock";
+import EducationWindow from "./EducationWindow";
+import SiriAI from "./SiriAI";
+import ProjectsFinder from "./ProjectsFinder";
 import { Canvas, useFrame, useThree, invalidate } from "@react-three/fiber";
 import { useGLTF, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
@@ -1294,6 +1297,9 @@ export default function MacbookHero() {
   const scrollYRef = useRef(0);
   const screenRectRef = useRef<ScreenRect | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [isEducationOpen, setIsEducationOpen] = useState(false);
+  const [isSiriOpen, setIsSiriOpen] = useState(false);
+  const [isProjectsOpen, setIsProjectsOpen] = useState(false);
 
   // References for mobile demand-driven scroll rendering pump
   const scrollPumpActiveRef = useRef(false);
@@ -1428,7 +1434,34 @@ export default function MacbookHero() {
             />
           </Suspense>
         </Canvas>
-        <MacDock screenRectRef={screenRectRef} isMobile={isMobile} />
+        <MacDock
+          screenRectRef={screenRectRef}
+          isMobile={isMobile}
+          onOpenEducation={() => setIsEducationOpen((prev) => !prev)}
+          isEducationOpen={isEducationOpen}
+          onOpenSiri={() => setIsSiriOpen((prev) => !prev)}
+          isSiriOpen={isSiriOpen}
+          onOpenProjects={() => setIsProjectsOpen((prev) => !prev)}
+          isProjectsOpen={isProjectsOpen}
+        />
+        <EducationWindow
+          isOpen={isEducationOpen}
+          onClose={() => setIsEducationOpen(false)}
+          screenRectRef={screenRectRef}
+          isMobile={isMobile}
+        />
+        <SiriAI
+          isOpen={isSiriOpen}
+          onClose={() => setIsSiriOpen(false)}
+          screenRectRef={screenRectRef}
+          isMobile={isMobile}
+        />
+        <ProjectsFinder
+          isOpen={isProjectsOpen}
+          onClose={() => setIsProjectsOpen(false)}
+          screenRectRef={screenRectRef}
+          isMobile={isMobile}
+        />
       </div>
     </div>
   );
