@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { ScreenRect } from "./MacDock";
+import SiriChat from "./SiriChat";
 
 export interface SiriAIProps {
   isOpen: boolean;
@@ -10,17 +11,39 @@ export interface SiriAIProps {
   isMobile: boolean;
 }
 
+type WindowState = "normal" | "maximized" | "minimized";
+
 export default function SiriAI({
   isOpen,
   onClose,
   screenRectRef,
   isMobile,
 }: SiriAIProps) {
+  const [windowState, setWindowState] = useState<WindowState>("normal");
   const [isRendered, setIsRendered] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const [inputValue, setInputValue] = useState("");
+  const [isTrafficHovered, setIsTrafficHovered] = useState(false);
+  const [windowPos, setWindowPos] = useState<{ x: number | null; y: number | null }>({
+    x: null,
+    y: null,
+  });
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const windowRef = useRef<HTMLDivElement>(null);
   const rafIdRef = useRef<number | null>(null);
+  const dragRef = useRef<{
+    isDragging: boolean;
+    startX: number;
+    startY: number;
+    initialLeft: number;
+    initialTop: number;
+  }>({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    initialLeft: 0,
+    initialTop: 0,
+  });
 
   // ── Sync screen position with MacBook 3D screen ──────────────────────────
   const updateScreenPosition = useCallback(() => {
@@ -45,6 +68,8 @@ export default function SiriAI({
   useEffect(() => {
     if (isOpen) {
       setIsRendered(true);
+      setWindowState("normal");
+      setWindowPos({ x: null, y: null });
       const timer = setTimeout(() => {
         setIsVisible(true);
       }, 20);
@@ -79,14 +104,81 @@ export default function SiriAI({
     };
   }, [isRendered, updateScreenPosition]);
 
-  const handleSend = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!inputValue.trim()) return;
-    // UI-only for now — no network request
-    setInputValue("");
+  // Traffic lights handlers
+  const handleClose = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsVisible(false);
+    setTimeout(() => {
+      onClose();
+    }, 200);
   };
 
+  const handleMinimize = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setWindowState("minimized");
+  };
+
+  const handleToggleMaximize = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setWindowState((prev) => (prev === "maximized" ? "normal" : "maximized"));
+  };
+
+  // Draggable window within screen boundaries
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (windowState === "maximized") return;
+    const win = windowRef.current;
+    const container = containerRef.current;
+    if (!win || !container) return;
+
+    const winRect = win.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    dragRef.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialLeft: winRect.left - containerRect.left,
+      initialTop: winRect.top - containerRect.top,
+    };
+
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current.isDragging || windowState === "maximized") return;
+    const container = containerRef.current;
+    const win = windowRef.current;
+    if (!container || !win) return;
+
+    const deltaX = e.clientX - dragRef.current.startX;
+    const deltaY = e.clientY - dragRef.current.startY;
+
+    const maxLeft = Math.max(0, container.clientWidth - win.clientWidth);
+    const maxTop = Math.max(30, container.clientHeight - win.clientHeight - 50);
+
+    const newLeft = Math.min(maxLeft, Math.max(0, dragRef.current.initialLeft + deltaX));
+    const newTop = Math.min(maxTop, Math.max(28, dragRef.current.initialTop + deltaY));
+
+    setWindowPos({ x: newLeft, y: newTop });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (dragRef.current.isDragging) {
+      dragRef.current.isDragging = false;
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // fallback
+      }
+    }
+  };
+
+
+
   if (!isRendered) return null;
+
+  const isMax = windowState === "maximized";
+  const isMin = windowState === "minimized";
 
   return (
     <div
@@ -100,261 +192,225 @@ export default function SiriAI({
         pointerEvents: "none",
         overflow: "hidden",
         borderRadius: "14px",
-        zIndex: 14, // Under Dock (z-index 15), above screen content
+        zIndex: 14, // Below MacDock (z-index 15), above Canvas
         willChange: "transform, width, height",
         opacity: 0,
-        transition: "opacity 0.22s ease",
+        transition: "opacity 0.2s ease",
       }}
     >
-      {/* Siri AI Overlay Container */}
+      {/* Floating macOS Siri AI Window */}
       <div
+        ref={windowRef}
         style={{
-          width: "100%",
-          height: "100%",
-          position: "relative",
+          position: "absolute",
+          ...(isMax
+            ? {
+                left: "12px",
+                top: isMobile ? "24px" : "32px",
+                width: "calc(100% - 24px)",
+                height: isMobile ? "calc(100% - 74px)" : "calc(100% - 94px)",
+              }
+            : {
+                left: windowPos.x !== null ? `${windowPos.x}px` : "50%",
+                top: windowPos.y !== null ? `${windowPos.y}px` : "46%",
+                transform:
+                  windowPos.x !== null
+                    ? "none"
+                    : "translate(-50%, -50%)",
+                width: isMobile ? "95%" : "min(600px, 80%)",
+                height: isMobile ? "86%" : "min(460px, 76%)",
+              }),
+          background: "rgba(0, 0, 0, 0.98)",
+          backdropFilter: "blur(40px) saturate(180%)",
+          WebkitBackdropFilter: "blur(40px) saturate(180%)",
+          borderRadius: isMobile ? "12px" : "16px",
+          border: "1px solid rgba(255, 255, 255, 0.12)",
+          boxShadow: [
+            "0 22px 60px rgba(0,0,0,0.65)",
+            "0 6px 18px rgba(0,0,0,0.40)",
+            "inset 0 1px 0 rgba(255,255,255,0.18)",
+          ].join(", "),
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "radial-gradient(ellipse at center, rgba(14, 14, 20, 0.72) 0%, rgba(6, 6, 10, 0.88) 100%)",
-          backdropFilter: "blur(24px) saturate(160%)",
-          WebkitBackdropFilter: "blur(24px) saturate(160%)",
-          opacity: isVisible ? 1 : 0,
-          scale: isVisible ? "1" : "0.95",
+          overflow: "hidden",
+          pointerEvents: isMin ? "none" : "auto",
+          opacity: isVisible && !isMin ? 1 : 0,
+          scale: isVisible && !isMin ? "1" : "0.92",
           transformOrigin: "center center",
-          transition: "opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), scale 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
+          transition:
+            "opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), scale 0.22s cubic-bezier(0.16, 1, 0.3, 1), width 0.25s ease, height 0.25s ease, top 0.25s ease, left 0.25s ease",
           willChange: "transform, opacity",
           userSelect: "none",
-          paddingBottom: "48px", // Space above dock
+          cursor: "default",
         }}
       >
-        {/* Subtle Close Button in top right of screen */}
-        <button
-          onClick={onClose}
-          aria-label="Close Siri AI"
-          style={{
-            position: "absolute",
-            top: "16px",
-            right: "16px",
-            width: "24px",
-            height: "24px",
-            borderRadius: "50%",
-            backgroundColor: "rgba(255, 255, 255, 0.08)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
-            color: "rgba(255, 255, 255, 0.7)",
-            fontSize: "12px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            outline: "none",
-            transition: "background-color 0.15s ease, color 0.15s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.16)";
-            e.currentTarget.style.color = "#FFFFFF";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
-            e.currentTarget.style.color = "rgba(255, 255, 255, 0.7)";
-          }}
-        >
-          ✕
-        </button>
-
-        {/* Center: Coming Soon Title */}
+        {/* Title Bar / Header (Draggable) */}
         <div
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
           style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            textAlign: "center",
-            gap: "8px",
-            marginBottom: isMobile ? "18px" : "28px",
-          }}
-        >
-          {/* Glowing Apple Intelligence gradient text */}
-          <h1
-            style={{
-              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif',
-              fontSize: isMobile ? "22px" : "32px",
-              fontWeight: 700,
-              letterSpacing: "-0.025em",
-              background: "linear-gradient(135deg, #FF6B9E 0%, #C850C0 25%, #7367F0 50%, #4158D0 75%, #00D2FF 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              margin: 0,
-              padding: "0 8px",
-              filter: "drop-shadow(0 2px 14px rgba(200, 80, 192, 0.35))",
-            }}
-          >
-            Coming Soon
-          </h1>
-
-          <p
-            style={{
-              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
-              fontSize: isMobile ? "11.5px" : "13.5px",
-              fontWeight: 400,
-              color: "#8E8E93",
-              margin: 0,
-              letterSpacing: "-0.01em",
-            }}
-          >
-            Dharmik AI is currently in training.
-          </p>
-        </div>
-
-        {/* Chat Box Wrapper with Apple Intelligence Multicolor Glow */}
-        <div
-          style={{
-            position: "relative",
-            width: isMobile ? "92%" : "min(440px, 84%)",
+            height: isMobile ? "34px" : "42px",
+            minHeight: isMobile ? "34px" : "42px",
+            background: "rgba(10, 10, 12, 0.95)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
+            justifyContent: "space-between",
+            padding: isMobile ? "0 10px" : "0 14px",
+            cursor: "default",
           }}
         >
-          {/* Soft multicolor ambient glow */}
-          <div
-            style={{
-              position: "absolute",
-              inset: "-3px",
-              borderRadius: "28px",
-              background: "linear-gradient(120deg, #FF4B72, #A855F7, #3B82F6, #06B6D4, #F59E0B, #FF4B72)",
-              backgroundSize: "300% 300%",
-              filter: "blur(10px)",
-              opacity: 0.55,
-              animation: "siriGlowFlow 8s ease infinite",
-              pointerEvents: "none",
-            }}
-          />
-
-          {/* Crisp border gradient */}
-          <div
-            style={{
-              position: "absolute",
-              inset: "-1px",
-              borderRadius: "26px",
-              background: "linear-gradient(120deg, rgba(255,75,114,0.7), rgba(168,85,247,0.7), rgba(59,130,246,0.7), rgba(6,182,212,0.7))",
-              backgroundSize: "200% 200%",
-              animation: "siriGlowFlow 8s ease infinite",
-              pointerEvents: "none",
-            }}
-          />
-
-          {/* Chat Box Interior */}
-          <form
-            onSubmit={handleSend}
-            style={{
-              position: "relative",
-              width: "100%",
-              height: isMobile ? "44px" : "50px",
-              backgroundColor: "rgba(22, 22, 26, 0.94)",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              borderRadius: "24px",
-              display: "flex",
-              alignItems: "center",
-              padding: isMobile ? "0 6px 0 8px" : "0 8px 0 10px",
-              gap: "8px",
-              boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 24px rgba(0, 0, 0, 0.45)",
-            }}
-          >
-            {/* Left: + Button */}
-            <button
-              type="button"
-              aria-label="Add attachment"
+          {/* Left: Traffic Lights & Title */}
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "14px" }}>
+            {/* macOS Traffic Lights */}
+            <div
+              onMouseEnter={() => setIsTrafficHovered(true)}
+              onMouseLeave={() => setIsTrafficHovered(false)}
               style={{
-                width: isMobile ? "28px" : "30px",
-                height: isMobile ? "28px" : "30px",
-                borderRadius: "50%",
-                backgroundColor: "rgba(255, 255, 255, 0.08)",
-                border: "1px solid rgba(255, 255, 255, 0.10)",
-                color: "rgba(255, 255, 255, 0.8)",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                outline: "none",
-                fontSize: "16px",
-                fontWeight: 400,
-                lineHeight: 1,
-                flexShrink: 0,
-                transition: "background-color 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.16)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+                gap: isMobile ? "6px" : "8px",
               }}
             >
-              +
-            </button>
+              {/* Close (Red) */}
+              <button
+                onClick={handleClose}
+                aria-label="Close window"
+                style={{
+                  width: isMobile ? "10px" : "12px",
+                  height: isMobile ? "10px" : "12px",
+                  borderRadius: "50%",
+                  backgroundColor: "#FF5F56",
+                  border: "0.5px solid #E0443E",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  padding: 0,
+                  outline: "none",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: isMobile ? "8px" : "9px",
+                    fontWeight: 800,
+                    lineHeight: 1,
+                    color: "rgba(0, 0, 0, 0.65)",
+                    opacity: isTrafficHovered ? 1 : 0,
+                    transition: "opacity 0.15s ease",
+                  }}
+                >
+                  ✕
+                </span>
+              </button>
 
-            {/* Center: Input with placeholder 'Dharmik AI' */}
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Dharmik AI"
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
-                fontSize: isMobile ? "13px" : "14px",
-                color: "#FFFFFF",
-                padding: "0 4px",
-                minWidth: 0,
-              }}
-            />
+              {/* Minimize (Yellow) */}
+              <button
+                onClick={handleMinimize}
+                aria-label="Minimize window"
+                style={{
+                  width: isMobile ? "10px" : "12px",
+                  height: isMobile ? "10px" : "12px",
+                  borderRadius: "50%",
+                  backgroundColor: "#FFBD2E",
+                  border: "0.5px solid #DEA123",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  padding: 0,
+                  outline: "none",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: isMobile ? "9px" : "10px",
+                    fontWeight: 900,
+                    lineHeight: 1,
+                    color: "rgba(0, 0, 0, 0.65)",
+                    opacity: isTrafficHovered ? 1 : 0,
+                    transform: "translateY(-1px)",
+                    transition: "opacity 0.15s ease",
+                  }}
+                >
+                  –
+                </span>
+              </button>
 
-            {/* Right: Send Button */}
-            <button
-              type="submit"
-              aria-label="Send"
+              {/* Maximize (Green) */}
+              <button
+                onClick={handleToggleMaximize}
+                aria-label="Maximize window"
+                style={{
+                  width: isMobile ? "10px" : "12px",
+                  height: isMobile ? "10px" : "12px",
+                  borderRadius: "50%",
+                  backgroundColor: "#27C93F",
+                  border: "0.5px solid #1AAB29",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  padding: 0,
+                  outline: "none",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: isMobile ? "7px" : "8px",
+                    fontWeight: 800,
+                    lineHeight: 1,
+                    color: "rgba(0, 0, 0, 0.65)",
+                    opacity: isTrafficHovered ? 1 : 0,
+                    transition: "opacity 0.15s ease",
+                  }}
+                >
+                  {isMax ? "⤡" : "⤢"}
+                </span>
+              </button>
+            </div>
+
+            {/* Title */}
+            <span
               style={{
-                height: isMobile ? "28px" : "30px",
-                padding: isMobile ? "0 10px" : "0 14px",
-                borderRadius: "16px",
-                backgroundColor: inputValue.trim() ? "#0071E3" : "rgba(255, 255, 255, 0.12)",
-                border: "none",
-                color: inputValue.trim() ? "#FFFFFF" : "rgba(255, 255, 255, 0.65)",
-                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
-                fontSize: isMobile ? "11.5px" : "12.5px",
+                fontFamily:
+                  '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
+                fontSize: isMobile ? "11.5px" : "13px",
                 fontWeight: 600,
-                cursor: inputValue.trim() ? "pointer" : "default",
-                outline: "none",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                transition: "background-color 0.18s ease, color 0.18s ease",
+                color: "rgba(255, 255, 255, 0.88)",
+                letterSpacing: "-0.01em",
               }}
             >
-              Send
-            </button>
-          </form>
-        </div>
-      </div>
+              Dharmik AI
+            </span>
+          </div>
 
-      {/* Lightweight CSS animation for subtle gradient flow */}
-      <style jsx>{`
-        @keyframes siriGlowFlow {
-          0% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-          100% {
-            background-position: 0% 50%;
-          }
-        }
-      `}</style>
+          {/* Right: Model badge Pixel v1.0 & Optional Clear Button */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: isMobile ? "2px 7px" : "3px 9px",
+                fontSize: isMobile ? "9.5px" : "11px",
+                fontWeight: 500,
+                color: "rgba(255, 255, 255, 0.7)",
+                fontFamily:
+                  '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
+                letterSpacing: "-0.01em",
+                userSelect: "none",
+              }}
+            >
+              Pixel v1.0
+            </div>
+          </div>
+        </div>
+
+        {/* Window Interior: Siri Chat Box */}
+        <SiriChat isMobile={isMobile} />
+      </div>
     </div>
   );
 }
