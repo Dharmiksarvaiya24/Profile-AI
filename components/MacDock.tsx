@@ -38,6 +38,7 @@ interface DockApp {
   src: string;
   href?: string;
   isSquircle?: boolean;
+  scaleModifier?: number;
 }
 
 const DOCK_APPS: DockApp[] = [
@@ -45,14 +46,14 @@ const DOCK_APPS: DockApp[] = [
   { id: "mail",     label: "Mail",         src: "/dock/mail.png",     isSquircle: true, href: "mailto:dharmik.be@gmail.com" },
   { id: "linkedin", label: "LinkedIn",     src: "/dock/linkedin.png", isSquircle: true, href: "https://www.linkedin.com/in/dharmiksarvaiya/" },
   { id: "github",   label: "GitHub",       src: "/dock/github.png",   isSquircle: true, href: "https://github.com/Dharmiksarvaiya24/" },
-  { id: "siri-ai",  label: "Dharmik AI",   src: "/dock/siri.png",     isSquircle: false },
-  { id: "pages",    label: "Education",    src: "/dock/pages.png",    isSquircle: true },
+  { id: "siri-ai",  label: "Dharmik AI",   src: "/dock/siri.png",     isSquircle: true, scaleModifier: 0.92 },
+  { id: "pages",    label: "Education",    src: "/dock/pages.png",    isSquircle: true, scaleModifier: 1.08 },
   { id: "trash",    label: "Trash",        src: "/dock/trash.png",    isSquircle: false },
 ];
 
 // ── Dock dimensions & magnification constants ───────────────────────────────
 const BASE_ICON_SIZE = 40;     // px — compact base icon box size
-const TARGET_ARTWORK_PX = 34;  // px — identical target visible artwork bounding size (85% fill)
+const TARGET_ARTWORK_PX = 36;  // px — identical target visible artwork bounding size (90% fill)
 const MAX_SCALE = 1.30;        // subtle, smooth magnification
 const INFLUENCE_RANGE = 1.85;  // neighbor influence range
 const LIFT_PX = 5;             // max upward lift in px
@@ -64,16 +65,16 @@ interface NormalizedArtwork {
   translateY: number;
 }
 
-// Precomputed exact artwork bounds measured from source PNG files (alpha > 15)
-// Guarantees instant accurate scale and zero-flicker on first render without relying solely on canvas.
+// Precomputed exact artwork bounds measured from actual source PNG files in public/dock/
+// Guarantees all dock icons render with identical visual size and zero flicker.
 const PRECOMPUTED_BOUNDS: Record<string, { w: number; h: number; minX: number; minY: number; maxX: number; maxY: number }> = {
-  "/dock/finder.png":   { w: 872, h: 872, minX: 16, minY: 14, maxX: 856, maxY: 856 },
-  "/dock/mail.png":     { w: 462, h: 462, minX: 0,  minY: 0,  maxX: 461, maxY: 461 },
+  "/dock/finder.png":   { w: 256, h: 256, minX: 0,  minY: 0,  maxX: 255, maxY: 255 },
+  "/dock/mail.png":     { w: 256, h: 256, minX: 0,  minY: 0,  maxX: 255, maxY: 255 },
   "/dock/linkedin.png": { w: 512, h: 512, minX: 0,  minY: 0,  maxX: 511, maxY: 511 },
   "/dock/github.png":   { w: 512, h: 512, minX: 0,  minY: 0,  maxX: 511, maxY: 511 },
-  "/dock/siri.png":     { w: 148, h: 148, minX: 13, minY: 19, maxX: 135, maxY: 139 },
-  "/dock/pages.png":    { w: 320, h: 320, minX: 1,  minY: 2,  maxX: 319, maxY: 319 },
-  "/dock/trash.png":    { w: 128, h: 128, minX: 18, minY: 14, maxX: 112, maxY: 121 },
+  "/dock/siri.png":     { w: 1024, h: 1024, minX: 0, minY: 0, maxX: 1023, maxY: 1023 },
+  "/dock/pages.png":    { w: 264, h: 264, minX: 0,  minY: 0,  maxX: 263, maxY: 263 },
+  "/dock/trash.png":    { w: 128, h: 128, minX: 18, minY: 14, maxX: 111, maxY: 120 },
 };
 
 function computeArtworkTransform(
@@ -172,10 +173,12 @@ const NormalizedIcon = React.memo(function NormalizedIcon({
   src,
   alt,
   isSquircle,
+  scaleModifier = 1,
 }: {
   src: string;
   alt: string;
   isSquircle?: boolean;
+  scaleModifier?: number;
 }) {
   const [norm, setNorm] = useState<NormalizedArtwork>(() => {
     return normCache.get(src) || computeArtworkTransform(512, 512, 0, 0, 511, 511);
@@ -190,6 +193,8 @@ const NormalizedIcon = React.memo(function NormalizedIcon({
       active = false;
     };
   }, [src]);
+
+  const finalScale = norm.scale * scaleModifier;
 
   return (
     <div
@@ -216,7 +221,7 @@ const NormalizedIcon = React.memo(function NormalizedIcon({
           userSelect: "none",
           pointerEvents: "none",
           transformOrigin: "center center",
-          transform: `translate3d(${norm.translateX.toFixed(2)}px, ${norm.translateY.toFixed(2)}px, 0) scale(${norm.scale.toFixed(3)})`,
+          transform: `translate3d(${norm.translateX.toFixed(2)}px, ${norm.translateY.toFixed(2)}px, 0) scale(${finalScale.toFixed(3)})`,
           willChange: "transform",
         }}
       />
@@ -492,6 +497,7 @@ export default function MacDock({
                   src={app.src}
                   alt={app.label}
                   isSquircle={app.isSquircle}
+                  scaleModifier={app.scaleModifier}
                 />
 
                 {/* macOS running app indicator dot */}
