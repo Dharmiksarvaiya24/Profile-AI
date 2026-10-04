@@ -142,22 +142,6 @@ function configureCanvasTexture(
   return texture;
 }
 
-// Helper: Sharp Texture Configuration (no mipmaps — for the screen/wallpaper).
-// The screen mesh is viewed nearly head-on, so mipmap interpolation only adds
-// blur. LinearFilter at both min and mag stages gives pixel-perfect sharpness.
-function configureSharpTexture(
-  texture: THREE.CanvasTexture,
-  maxAnisotropy = 16
-): THREE.CanvasTexture {
-  texture.generateMipmaps = false;
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = maxAnisotropy;
-  texture.needsUpdate = true;
-  return texture;
-}
-
 // ============================================================================
 // Helper: Draw Apple Logo Texture using simple-icons (1024x1024 Fixed Native)
 // ============================================================================
@@ -811,6 +795,9 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
     const group = laptopGroupRef.current;
     if (!group) return;
 
+    let initialScale = scale;
+    let measuredData: ModelMeasurements | null = null;
+
     // 1. Measure open & closed pose
     if (lidNode) {
       lidNode.rotation.x = LID_OPEN_ROT;
@@ -837,7 +824,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
       // Compute accurate scale and initial position for current viewport
       const maxW = isMobile ? MAX_W_FRAC_MOBILE : MAX_W_FRAC;
       const maxH = isMobile ? MAX_H_FRAC_MOBILE : MAX_H_FRAC;
-      const initialScale = Math.min(
+      initialScale = Math.min(
         (W * maxW) / openSize.x,
         (H * maxH) / openSize.y
       );
@@ -865,15 +852,12 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
 
       lidNodeRef.current = lidNode;
 
-      // Defer setState to avoid synchronous setState in effect warning
-      setTimeout(() => {
-        setMeasurements({
-          openSize,
-          openCenter,
-          closedSize,
-          closedCenter,
-        });
-      }, 0);
+      measuredData = {
+        openSize,
+        openCenter,
+        closedSize,
+        closedCenter,
+      };
     }
 
     // 2. Keyboard on the deck (expanded width matching MacBook Pro proportions)
@@ -987,7 +971,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
       lidNode.rotation.x = LID_CLOSED_ROT;
       group.position.set(0, startYRef.current, 0);
       group.rotation.set(START_ROT_X, 0, 0);
-      group.scale.setScalar(scale);
+      group.scale.setScalar(initialScale);
       group.updateMatrixWorld(true);
     }
 
@@ -1000,9 +984,16 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
       });
     }
 
-    // Mark as ready - this gates rendering
-    setIsReady(true);
-    onModelLoaded();
+    // Mark as ready and commit measurements together in macrotask to avoid setState-in-effect cascading render warning
+    const timer = setTimeout(() => {
+      if (measuredData) {
+        setMeasurements(measuredData);
+      }
+      setIsReady(true);
+      onModelLoaded();
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [scene, onModelLoaded, isMobile, maxAnisotropy, envIntensityMobile, W, H]);
 
   // On mobile: request render frame when ready or measurements change
@@ -1222,10 +1213,10 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
     );
   }
 
-  // On mobile: hide the model until it has been positioned at its correct bottom-peek
-  // starting coordinate. This prevents the 1-frame "drop from top" glitch without
-  // blocking the group from mounting (which would cause measurements to never be set).
-  const modelVisible = !isMobile || (isReady && !!measurements);
+  // Hide the model until it has been positioned at its correct bottom-peek
+  // starting coordinate. This prevents the 1-frame "drop from top" glitch on ALL devices
+  // without blocking the group from mounting (which would cause measurements to never be set).
+  const modelVisible = Boolean(isReady && measurements);
 
   return (
     <>
@@ -1259,11 +1250,13 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
         distance={6}
       />
 
-      {/* Laptop Group — always mounted so ref is available for measurement */}
+      {/* Laptop Group — always mounted so ref is available for measurement, starts offscreen */}
       <group
         ref={laptopGroupRef}
         dispose={null}
         visible={modelVisible}
+        position={[0, -50, 0]}
+        scale={[0.001, 0.001, 0.001]}
       >
         <primitive object={scene} />
       </group>
@@ -1272,6 +1265,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
       <group
         ref={shadowGroupRef}
         visible={modelVisible}
+        position={[0, -50, 0]}
       >
         <ContactShadows
           position={[0, 0, 0]}
@@ -1296,7 +1290,10 @@ export default function MacbookHero() {
   // expensive window.scrollY DOM read inside the hot useFrame path (item 5)
   const scrollYRef = useRef(0);
   const screenRectRef = useRef<ScreenRect | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth < 768;
+  });
   const [isEducationOpen, setIsEducationOpen] = useState(false);
   const [isSiriOpen, setIsSiriOpen] = useState(false);
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);

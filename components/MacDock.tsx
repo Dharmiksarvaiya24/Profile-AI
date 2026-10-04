@@ -46,7 +46,7 @@ const DOCK_APPS: DockApp[] = [
   { id: "mail",     label: "Mail",         src: "/dock/mail.png",     isSquircle: true, href: "mailto:dharmik.be@gmail.com" },
   { id: "linkedin", label: "LinkedIn",     src: "/dock/linkedin.png", isSquircle: true, href: "https://www.linkedin.com/in/dharmiksarvaiya/" },
   { id: "github",   label: "GitHub",       src: "/dock/github.png",   isSquircle: true, href: "https://github.com/Dharmiksarvaiya24/" },
-  { id: "siri-ai",  label: "Dharmik AI",   src: "/dock/siri.png",     isSquircle: true, scaleModifier: 0.92 },
+  { id: "siri-ai",  label: "Dharmik AI",   src: "/dock/siri.png",     isSquircle: true, scaleModifier: 1.15 },
   { id: "pages",    label: "Education",    src: "/dock/pages.png",    isSquircle: true, scaleModifier: 1.08 },
   { id: "trash",    label: "Trash",        src: "/dock/trash.png",    isSquircle: false },
 ];
