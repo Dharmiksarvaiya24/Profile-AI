@@ -21,7 +21,7 @@ if (typeof window !== "undefined") {
 }
 
 export default function MacbookWrapper() {
-  const [shouldRender, setShouldRender] = useState(false);
+  const [shouldRender, setShouldRender] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

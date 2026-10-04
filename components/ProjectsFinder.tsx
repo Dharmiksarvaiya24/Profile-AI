@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { ScreenRect } from "./MacDock";
+import ProjectsContent from "./ProjectsContent";
+import { PROJECTS_DATA } from "../data/projectsData";
 
 export interface ProjectsFinderProps {
   isOpen: boolean;
@@ -21,7 +23,7 @@ export default function ProjectsFinder({
   const [windowState, setWindowState] = useState<WindowState>("normal");
   const [isRendered, setIsRendered] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const [currentFolder, setCurrentFolder] = useState<"root" | "demo">("root");
+  const [currentFolder, setCurrentFolder] = useState<string>("root");
   const [isTrafficHovered, setIsTrafficHovered] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -309,7 +311,7 @@ export default function ProjectsFinder({
                   backgroundColor: "transparent",
                   border: "none",
                   color:
-                    currentFolder === "demo"
+                    currentFolder !== "root"
                       ? "rgba(255, 255, 255, 0.85)"
                       : "rgba(255, 255, 255, 0.25)",
                   fontSize: "13px",
@@ -317,7 +319,7 @@ export default function ProjectsFinder({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  cursor: currentFolder === "demo" ? "pointer" : "default",
+                  cursor: currentFolder !== "root" ? "pointer" : "default",
                   outline: "none",
                   transition: "background-color 0.15s ease",
                 }}
@@ -355,9 +357,28 @@ export default function ProjectsFinder({
                 fontWeight: 600,
                 color: "#E5E5EA",
                 whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
               }}
             >
-              {currentFolder === "root" ? "Projects" : "Projects › Demo"}
+              {currentFolder === "root" ? (
+                "Projects"
+              ) : (
+                <>
+                  <span
+                    onClick={() => setCurrentFolder("root")}
+                    style={{ cursor: "pointer", opacity: 0.7 }}
+                  >
+                    Projects
+                  </span>
+                  <span style={{ opacity: 0.4 }}>›</span>
+                  <span>
+                    {PROJECTS_DATA.find((p) => p.slug === currentFolder)
+                      ?.displayName || currentFolder}
+                  </span>
+                </>
+              )}
             </span>
           </div>
 
@@ -429,28 +450,28 @@ export default function ProjectsFinder({
             overflow: "hidden",
           }}
         >
-          {/* Left Sidebar (macOS style favorites) */}
+          {/* Left Sidebar (macOS style favorites) — compact width & spacing */}
           {!isMobile && (
             <div
               style={{
-                width: "135px",
+                width: "108px",
                 backgroundColor: "rgba(24, 24, 28, 0.65)",
                 borderRight: "1px solid rgba(255, 255, 255, 0.06)",
-                padding: "12px 8px",
+                padding: "8px 5px",
                 display: "flex",
                 flexDirection: "column",
-                gap: "4px",
-                fontSize: "11.5px",
+                gap: "2px",
+                fontSize: "11px",
                 fontFamily:
                   '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
               }}
             >
               <div
                 style={{
-                  fontSize: "10px",
+                  fontSize: "9.5px",
                   fontWeight: 600,
                   color: "rgba(255, 255, 255, 0.35)",
-                  padding: "0 6px 4px 6px",
+                  padding: "0 4px 2px 4px",
                   textTransform: "uppercase",
                   letterSpacing: "0.03em",
                 }}
@@ -464,8 +485,8 @@ export default function ProjectsFinder({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "7px",
-                  padding: "5px 8px",
+                  gap: "5px",
+                  padding: "3px 6px",
                   borderRadius: "5px",
                   backgroundColor:
                     currentFolder === "root"
@@ -487,8 +508,8 @@ export default function ProjectsFinder({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "7px",
-                  padding: "5px 8px",
+                  gap: "5px",
+                  padding: "3px 6px",
                   borderRadius: "5px",
                   color: "rgba(255, 255, 255, 0.45)",
                 }}
@@ -505,8 +526,8 @@ export default function ProjectsFinder({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "7px",
-                  padding: "5px 8px",
+                  gap: "5px",
+                  padding: "3px 6px",
                   borderRadius: "5px",
                   color: "rgba(255, 255, 255, 0.45)",
                 }}
@@ -524,7 +545,7 @@ export default function ProjectsFinder({
           <div
             style={{
               flex: 1,
-              padding: isMobile ? "14px 16px" : "20px 24px",
+              padding: isMobile ? "12px 14px" : "16px 20px",
               overflowY: "auto",
               display: "flex",
               flexDirection: "column",
@@ -532,118 +553,12 @@ export default function ProjectsFinder({
                 '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
             }}
           >
-            {currentFolder === "root" ? (
-              /* Root: Shows the Demo Folder */
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "20px" }}>
-                <div
-                  onClick={() => setCurrentFolder("demo")}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "6px",
-                    width: "84px",
-                    padding: "8px 6px",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    transition: "background-color 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                  }}
-                >
-                  {/* macOS Blue Folder Icon */}
-                  <div
-                    style={{
-                      width: "56px",
-                      height: "46px",
-                      position: "relative",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <svg
-                      width="54"
-                      height="44"
-                      viewBox="0 0 64 52"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      {/* Back tab */}
-                      <path
-                        d="M4 10C4 6.68629 6.68629 4 10 4H23.5858C25.1771 4 26.7033 4.63214 27.8284 5.75736L31.4142 9.34315C32.1643 10.0932 33.1818 10.5147 34.2426 10.5147H54C57.3137 10.5147 60 13.201 60 16.5147V42C60 45.3137 57.3137 48 54 48H10C6.68629 48 4 45.3137 4 42V10Z"
-                        fill="#0071E3"
-                      />
-                      {/* Folder front flap with subtle gradient */}
-                      <path
-                        d="M4 18C4 14.6863 6.68629 12 10 12H54C57.3137 12 60 14.6863 60 18V42C60 45.3137 57.3137 48 54 48H10C6.68629 48 4 45.3137 4 42V18Z"
-                        fill="url(#folderGrad)"
-                      />
-                      <defs>
-                        <linearGradient id="folderGrad" x1="32" y1="12" x2="32" y2="48" gradientUnits="userSpaceOnUse">
-                          <stop stopColor="#389BFF" />
-                          <stop offset="1" stopColor="#0071E3" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
-                  </div>
-
-                  {/* Folder Label */}
-                  <span
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 500,
-                      color: "#FFFFFF",
-                      textAlign: "center",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    Demo
-                  </span>
-                </div>
-              </div>
-            ) : (
-              /* Inside Demo Folder */
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "rgba(255, 255, 255, 0.4)",
-                  gap: "10px",
-                }}
-              >
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M4 7V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7" />
-                  <path d="M9 12h6M9 16h4" />
-                </svg>
-                <div style={{ fontSize: "13px", fontWeight: 500, color: "rgba(255, 255, 255, 0.6)" }}>
-                  Placeholder folder for projects
-                </div>
-                <button
-                  onClick={() => setCurrentFolder("root")}
-                  style={{
-                    marginTop: "6px",
-                    padding: "4px 12px",
-                    borderRadius: "6px",
-                    backgroundColor: "rgba(255, 255, 255, 0.08)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    color: "#FFFFFF",
-                    fontSize: "12px",
-                    cursor: "pointer",
-                    outline: "none",
-                  }}
-                >
-                  ‹ Back to Projects
-                </button>
-              </div>
-            )}
+            <ProjectsContent
+              currentFolder={currentFolder}
+              onSelectFolder={(slug) => setCurrentFolder(slug)}
+              onBackToRoot={() => setCurrentFolder("root")}
+              isMobile={isMobile}
+            />
           </div>
         </div>
 
@@ -663,7 +578,9 @@ export default function ProjectsFinder({
               '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
           }}
         >
-          {currentFolder === "root" ? "1 item, 256 GB available" : "0 items, 256 GB available"}
+          {currentFolder === "root"
+            ? `${PROJECTS_DATA.length} items, 256 GB available`
+            : "1 item, 256 GB available"}
         </div>
       </div>
     </div>
