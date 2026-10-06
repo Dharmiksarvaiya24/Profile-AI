@@ -635,16 +635,50 @@ function createMacOSWallpaperTexture(
         menuX += mW + Math.round(42 * s * fontBoost);
       }
 
-      // Date & Time — only draw if it fits to the right of the notch
+      // Helper for canvas rounded rectangles with fallback
+      const drawRoundRect = (
+        targetCtx: CanvasRenderingContext2D,
+        rx: number,
+        ry: number,
+        rw: number,
+        rh: number,
+        rad: number | number[]
+      ) => {
+        if (typeof targetCtx.roundRect === "function") {
+          targetCtx.roundRect(rx, ry, rw, rh, rad);
+        } else {
+          const rVal = typeof rad === "number" ? rad : rad[0] || 0;
+          targetCtx.moveTo(rx + rVal, ry);
+          targetCtx.lineTo(rx + rw - rVal, ry);
+          targetCtx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + rVal);
+          targetCtx.lineTo(rx + rw, ry + rh - rVal);
+          targetCtx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - rVal, ry + rh);
+          targetCtx.lineTo(rx + rVal, ry + rh);
+          targetCtx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - rVal);
+          targetCtx.lineTo(rx, ry + rVal);
+          targetCtx.quadraticCurveTo(rx, ry, rx + rVal, ry);
+          targetCtx.closePath();
+        }
+      };
+
+      // Date & Time — formatted like macOS (e.g., "Tue 6 Oct  6:25 PM")
       const now = new Date();
-      const timeStr = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-      const dateStr = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-      const fullTimeStr = `${dateStr}  ${timeStr}`;
+      const weekday = now.toLocaleDateString("en-US", { weekday: "short" });
+      const day = now.getDate();
+      const month = now.toLocaleDateString("en-US", { month: "short" });
+      let hours = now.getHours();
+      const minutes = now.getMinutes().toString().padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12;
+      const fullTimeStr = `${weekday} ${day} ${month}  ${hours}:${minutes} ${ampm}`;
+
       ctx.font = `500 ${fontMd}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
       const timeW = ctx.measureText(fullTimeStr).width;
       const timeX = cW - Math.round(52 * s);
-      // Only draw time if it doesn't overlap the right edge of the notch
-      if (timeX - timeW > notchRightX + notchGap) {
+      const timeTextLeft = timeX - timeW;
+
+      // Only draw tray and time if it doesn't overlap the right edge of the notch
+      if (timeTextLeft > notchRightX + notchGap) {
         ctx.textAlign = "right";
         ctx.shadowColor = "transparent";
         ctx.shadowBlur = 0;
@@ -655,6 +689,165 @@ function createMacOSWallpaperTexture(
         }
         ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
         ctx.fillText(fullTimeStr, timeX, barH / 2);
+
+        // ── macOS Menu Bar Status Icons (Bluetooth, Control Center, Siri) ──
+        const cy = barH / 2;
+        const iconGap = Math.round(28 * s * fontBoost);
+        const timeGap = Math.round(30 * s * fontBoost);
+
+        // Individual icon dimensions
+        const siriR = Math.round(13.5 * s * fontBoost);
+        const siriW = siriR * 2;
+
+        const ccW = Math.round(32 * s * fontBoost);
+        const ccH = Math.round(23 * s * fontBoost);
+
+        const btW = Math.round(18 * s * fontBoost);
+        const btH = Math.round(28 * s * fontBoost);
+
+        const totalTrayW = btW + iconGap + ccW + iconGap + siriW;
+        const trayRightX = timeTextLeft - timeGap;
+        const trayLeftX = trayRightX - totalTrayW;
+
+        // Draw status icons only if they safely clear the notch
+        if (trayLeftX > notchRightX + notchGap) {
+          // Pre-determine cutout color from the wallpaper pixels at this position
+          let cutoutColor = "#1a162b";
+          try {
+            const pixel = ctx.getImageData(Math.round(trayLeftX + totalTrayW * 0.4), Math.round(cy), 1, 1).data;
+            if (pixel[3] > 0) {
+              cutoutColor = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+            }
+          } catch {
+            // fallback color
+          }
+
+          let currX = trayLeftX;
+
+          // 1. Bluetooth Icon
+          {
+            const btcX = currX + btW / 2;
+            const btcY = cy;
+            const spineX = btcX - btW * 0.08;
+            const rightX = spineX + btW * 0.54;
+            const leftX = spineX - btW * 0.44;
+            const topY = btcY - btH * 0.48;
+            const botY = btcY + btH * 0.48;
+            const qTopY = btcY - btH * 0.24;
+            const qBotY = btcY + btH * 0.24;
+
+            ctx.save();
+            if (!isMobile) {
+              ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+              ctx.shadowBlur = Math.round(5 * s);
+              ctx.shadowOffsetY = 1;
+            }
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+            ctx.lineWidth = Math.max(1.6, 2.4 * s * fontBoost);
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+
+            ctx.beginPath();
+            // Vertical spine
+            ctx.moveTo(spineX, topY);
+            ctx.lineTo(spineX, botY);
+            // Lower-left tail to top-right to spine
+            ctx.moveTo(leftX, qBotY);
+            ctx.lineTo(rightX, qTopY);
+            ctx.lineTo(spineX, topY);
+            // Upper-left tail to bottom-right to spine
+            ctx.moveTo(leftX, qTopY);
+            ctx.lineTo(rightX, qBotY);
+            ctx.lineTo(spineX, botY);
+            ctx.stroke();
+            ctx.restore();
+          }
+          currX += btW + iconGap;
+
+          // 2. Control Center Icon (two toggle sliders)
+          {
+            ctx.save();
+            if (!isMobile) {
+              ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+              ctx.shadowBlur = Math.round(5 * s);
+              ctx.shadowOffsetY = 1;
+            }
+
+            const toggleW = ccW;
+            const toggleH = Math.round(9.5 * s * fontBoost);
+            const toggleGap = Math.round(3.5 * s * fontBoost);
+            const toggleR = toggleH / 2;
+            const topToggleY = cy - (toggleH * 2 + toggleGap) / 2;
+            const botToggleY = topToggleY + toggleH + toggleGap;
+            const lineWidth = Math.max(1.4, 1.8 * s * fontBoost);
+
+            // Top toggle: Hollow outline, knob on LEFT
+            ctx.beginPath();
+            drawRoundRect(ctx, currX, topToggleY, toggleW, toggleH, toggleR);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+            ctx.lineWidth = lineWidth;
+            ctx.stroke();
+
+            // Knob on left
+            const knobR = toggleR - lineWidth * 0.8;
+            ctx.beginPath();
+            ctx.arc(currX + toggleR, topToggleY + toggleR, knobR, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+            ctx.fill();
+
+            // Bottom toggle: Filled white, knob cutout on RIGHT
+            ctx.beginPath();
+            drawRoundRect(ctx, currX, botToggleY, toggleW, toggleH, toggleR);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+            ctx.fill();
+
+            // Dark cutout knob on right
+            ctx.beginPath();
+            ctx.arc(currX + toggleW - toggleR, botToggleY + toggleR, knobR, 0, Math.PI * 2);
+            ctx.fillStyle = cutoutColor;
+            ctx.fill();
+
+            ctx.restore();
+          }
+          currX += ccW + iconGap;
+
+          // 3. Siri Icon (circle with wave)
+          {
+            const siriX = currX;
+            const scX = siriX + siriR;
+            const scY = cy;
+            const siriStrokeW = Math.max(1.4, 2.2 * s * fontBoost);
+
+            ctx.save();
+            if (!isMobile) {
+              ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+              ctx.shadowBlur = Math.round(5 * s);
+              ctx.shadowOffsetY = 1;
+            }
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+            ctx.lineWidth = siriStrokeW;
+            ctx.lineCap = "round";
+
+            // Outer circle
+            ctx.beginPath();
+            ctx.arc(scX, scY, siriR, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Siri wave
+            ctx.beginPath();
+            const leftWaveX = scX - siriR + siriStrokeW * 0.4;
+            const rightWaveX = scX + siriR - siriStrokeW * 0.4;
+            ctx.moveTo(leftWaveX, scY);
+            ctx.bezierCurveTo(
+              scX - siriR * 0.45, scY + siriR * 0.70,
+              scX + siriR * 0.45, scY - siriR * 0.70,
+              rightWaveX, scY
+            );
+            ctx.stroke();
+
+            ctx.restore();
+          }
+        }
       }
       ctx.shadowColor = "transparent";
       ctx.shadowBlur = 0;
