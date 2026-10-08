@@ -84,6 +84,11 @@ export const BODY_NODE_NAME = "body";
 export const MODEL_PATH = "/mac.glb";
 export const WALLPAPER_PATH = "/goldengate.jpg";
 
+// Preload GLTF immediately
+if (typeof window !== "undefined") {
+  useGLTF.preload(MODEL_PATH);
+}
+
 // 7. Physical Lid Dimensions for Zoom Target Framing (all 4 bezels visible, keyboard excluded)
 export const TOTAL_LID_WIDTH = 31.48;
 export const TOTAL_LID_HEIGHT = 21.88;
@@ -1025,7 +1030,8 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
       const pxToWorld = pxToWorldRef.current;
       const closedCenterY = -closedCenter.y * initialScale + CENTER_Y_OFFSET;
       const openCenterY = -openCenter.y * initialScale + CENTER_Y_OFFSET;
-      const startY = -HRef.current / 2 - (closedCenter.y + closedSize.y / 2) * initialScale + 45 * pxToWorld;
+      const peekPx = isMobile ? 60 : 72;
+      const startY = -HRef.current / 2 - (closedCenter.y + closedSize.y / 2) * initialScale + peekPx * pxToWorld;
 
       // Cache for useFrame
       closedCenterYRef.current = closedCenterY;
@@ -1202,7 +1208,8 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
     const s = scale;
     closedCenterYRef.current = -measurements.closedCenter.y * s + CENTER_Y_OFFSET;
     openCenterYRef.current = -measurements.openCenter.y * s + CENTER_Y_OFFSET;
-    startYRef.current = -HRef.current / 2 - (measurements.closedCenter.y + measurements.closedSize.y / 2) * s + 45 * pxToWorldRef.current;
+    const peekPx = isMobile ? 60 : 72;
+    startYRef.current = -HRef.current / 2 - (measurements.closedCenter.y + measurements.closedSize.y / 2) * s + peekPx * pxToWorldRef.current;
 
     const zoomTarget = computeZoomTarget(W, H, isMobile);
     targetScaleRef.current = zoomTarget.targetScale;
@@ -1219,13 +1226,14 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
     const updatePxToWorld = () => {
       pxToWorldRef.current = HRef.current / (window.innerHeight || 1);
       if (measurements) {
-        startYRef.current = -HRef.current / 2 - (measurements.closedCenter.y + measurements.closedSize.y / 2) * scale + 45 * pxToWorldRef.current;
+        const peekPx = isMobile ? 60 : 72;
+        startYRef.current = -HRef.current / 2 - (measurements.closedCenter.y + measurements.closedSize.y / 2) * scale + peekPx * pxToWorldRef.current;
       }
     };
     updatePxToWorld();
     window.addEventListener("resize", updatePxToWorld, { passive: true });
     return () => window.removeEventListener("resize", updatePxToWorld);
-  }, [measurements, scale]);
+  }, [measurements, scale, isMobile]);
 
   // Frame-by-frame update loop - heavily optimized
   useFrame(({ camera }) => {
@@ -1251,8 +1259,8 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
     let shadowOp = 0;
     let screenGlow = 0;
 
-    if (progress <= 0.28) {
-      // 0.00–0.28: Rise phase driven 1:1 by actual scroll distance
+    if (progress <= 0.14) {
+      // 0.00–0.14: Fast responsive rise phase driven 1:1 by scroll
       currentY = riseWorldY;
       const riseDist = Math.max(0.001, closedCenterY - startY);
       const riseT = Math.min(1, Math.max(0, (currentY - startY) / riseDist));
@@ -1262,9 +1270,9 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
       currentZ = 0;
       shadowOp = riseT * baseShadowOp;
       screenGlow = 0;
-    } else if (progress <= 0.68) {
-      // 0.28–0.68: Lid opening phase (smoothly opens to fully open MacBook)
-      const openT = (progress - 0.28) / 0.40;
+    } else if (progress <= 0.52) {
+      // 0.14–0.52: Early lid opening phase (smoothly opens to fully open MacBook)
+      const openT = (progress - 0.14) / 0.38;
       const easeT = openT < 0.5 ? 2 * openT * openT : 1 - Math.pow(-2 * openT + 2, 2) / 2;
 
       currentLidRotX = THREE.MathUtils.lerp(LID_CLOSED_ROT, LID_OPEN_ROT, easeT);
@@ -1274,8 +1282,8 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
       currentScale = scale;
       shadowOp = baseShadowOp;
       screenGlow = easeT * 0.4;
-    } else if (progress <= 0.74) {
-      // 0.68–0.74: Hold open MacBook state (Reference Image 2)
+    } else if (progress <= 0.64) {
+      // 0.52–0.64: Hold open MacBook state
       currentLidRotX = LID_OPEN_ROT;
       currentY = openCenterY;
       currentRotX = CENTER_ROT_X;
@@ -1284,8 +1292,8 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
       shadowOp = baseShadowOp;
       screenGlow = 0.4;
     } else {
-      // 0.74–1.00: Screen Expansion phase into close-up state (Reference Image 1)
-      const ep = Math.min(1, Math.max(0, (progress - 0.74) / 0.20)); // reaches 1.0 at 0.94, holds 0.94-1.00
+      // 0.64–1.00: Screen Expansion phase into close-up state
+      const ep = Math.min(1, Math.max(0, (progress - 0.64) / 0.26)); // reaches 1.0 at 0.90, holds 0.90-1.00
       const expandT = ep < 0.5 ? 2 * ep * ep : 1 - Math.pow(-2 * ep + 2, 2) / 2;
 
       currentLidRotX = THREE.MathUtils.lerp(LID_OPEN_ROT, Math.PI / 2, expandT);
@@ -1364,8 +1372,8 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
       }
 
       // Determine visibility: screen should be sufficiently open (lid > ~45°)
-      // The lid is fully open when progress > 0.48 (midpoint of open phase)
-      const dockVisible = progress > 0.48 && (maxX - minX) > 30;
+      // The lid is visible earlier: when progress > 0.30
+      const dockVisible = progress > 0.30 && (maxX - minX) > 30;
 
       const sr = screenRectRef.current;
       if (!sr) {
@@ -1396,7 +1404,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
     return (
       <>
         <CameraController />
-        <Environment preset="city" background={false} />
+        <Environment files="/potsdamer_platz_1k.hdr" background={false} />
         <ambientLight intensity={0.65} />
         <directionalLight position={[0, 6, 6]} intensity={1.1} />
         <pointLight position={[0, -2.5, -4]} color="#4A9EFF" intensity={1.8} distance={16} />
@@ -1415,8 +1423,8 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
     <>
       <CameraController />
 
-      {/* Flatter Ambient Environment without dark zenith artifacts */}
-      <Environment preset="city" background={false} />
+      {/* Local Studio Environment without external network latency */}
+      <Environment files="/potsdamer_platz_1k.hdr" background={false} />
 
       {/* Subtle soft blue rim light */}
       <pointLight
@@ -1443,22 +1451,19 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
         distance={6}
       />
 
-      {/* Laptop Group — always mounted so ref is available for measurement, starts offscreen */}
+      {/* Laptop Group — visibility controlled after measurements */}
       <group
         ref={laptopGroupRef}
         dispose={null}
         visible={modelVisible}
-        position={[0, -50, 0]}
-        scale={[0.001, 0.001, 0.001]}
       >
         <primitive object={scene} />
       </group>
 
-      {/* Soft ContactShadows under the laptop - baked to 1 frame on mobile */}
+      {/* Soft ContactShadows under the laptop */}
       <group
         ref={shadowGroupRef}
         visible={modelVisible}
-        position={[0, -50, 0]}
       >
         <ContactShadows
           position={[0, 0, 0]}
@@ -1467,7 +1472,6 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
           blur={contactShadowBlur}
           far={4}
           resolution={shadowResolution}
-          frames={isMobile ? (isReady && !!measurements ? 1 : 0) : undefined}
           smooth={!isMobile}
           color="#000000"
         />

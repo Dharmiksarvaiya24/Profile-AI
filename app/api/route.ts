@@ -27,7 +27,7 @@ const globalDay = new Ratelimit({
 
 const MAX_CHARS = 100; 
 const MAX_TURNS = 10;
-const MAX_OUTPUT_TOKENS = 250;
+const MAX_OUTPUT_TOKENS = 800;
 
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN ?? "")
   .split(",")
@@ -62,7 +62,7 @@ const ALLOWED_HOSTS = [
 ];
 
 function replyLooksSafe(text: string) {
-  if (!text || text.length > 1200) return false;
+  if (!text || text.length > 4000) return false;
   if (text.includes(CANARY)) return false;
   if (text.includes("```")) return false;
   if (/<script|<iframe|javascript:/i.test(text)) return false;
@@ -83,6 +83,12 @@ const reply = (text: string, status = 200) =>
   new Response(JSON.stringify({ reply: text }), {
     status,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
+
+const streamReply = (text: string) =>
+  new Response(text, {
+    status: 200,
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
   });
 
 export async function POST(req: Request) {
@@ -130,64 +136,91 @@ export async function POST(req: Request) {
 
   if (SUSPICIOUS.some((re) => re.test(last))) return reply(REFUSAL);
 
-  let requested = (process.env.GEMINI_MODEL || "gemini-flash-lite-latest").trim();
+  let requested = (process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
   if (requested.endsWith("-light")) {
     requested = requested.replace(/-light$/, "-lite");
   }
 
   const candidateModels = [
-    requested,
-    "gemini-flash-lite-latest",
-    "gemini-3.5-flash-lite",
+    requested === "gemini-flash-lite-latest" ? "gemini-3.5-flash" : requested,
     "gemini-3.5-flash",
     "gemini-3.6-flash",
+    "gemini-flash-lite-latest",
   ].filter(
     (m, idx, arr) =>
       Boolean(m) &&
       m !== "gemini-2.5-flash" &&
       m !== "gemini-2.0-flash" &&
+      m !== "gemini-2.0-flash-lite" &&
+      m !== "gemini-3.5-flash-lite" &&
       arr.indexOf(m) === idx
   );
 
   try {
-    let res: any = null;
+    let streamResult: any = null;
     let lastErr: any = null;
 
     for (const model of candidateModels) {
       try {
-        res = await ai.models.generateContent({
+        streamResult = await ai.models.generateContentStream({
           model,
           contents: history,
           config: {
             systemInstruction: SYSTEM,
             maxOutputTokens: MAX_OUTPUT_TOKENS,
             temperature: 0.3,
+            thinkingConfig: { thinkingBudget: 0 },
           },
         });
-        if (res) break;
+        if (streamResult) break;
       } catch (err) {
         lastErr = err;
         console.warn(`Model ${model} failed, trying next candidate:`, (err as any)?.message || err);
       }
     }
 
-    if (!res) {
+    if (!streamResult) {
       console.error("All Gemini model candidates failed:", lastErr);
       return reply("Something went wrong. Please try again.", 500);
     }
 
-    if (res.usageMetadata) {
-      console.log("usage", res.usageMetadata);
-    }
+    // Stream chunks directly from Gemini for ultra-fast time-to-first-token
+    const encoder = new TextEncoder();
+    let accumulated = "";
 
-    const text = (res.text ?? "").trim();
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of streamResult) {
+            const chunkText = chunk.text ?? "";
+            if (!chunkText) continue;
+            accumulated += chunkText;
 
-    if (text.includes(CANARY)) {
-      console.warn("canary triggered", { ip, message: last });
-    }
-    if (!replyLooksSafe(text)) return reply(REFUSAL);
+            if (accumulated.includes(CANARY)) {
+              console.warn("canary triggered during stream", { ip, message: last });
+              controller.enqueue(encoder.encode(REFUSAL));
+              controller.close();
+              return;
+            }
 
-    return reply(text);
+            controller.enqueue(encoder.encode(chunkText));
+          }
+          controller.close();
+        } catch (err) {
+          controller.error(err);
+        }
+      },
+    });
+
+    return new Response(readable, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Transfer-Encoding": "chunked",
+      },
+    });
   } catch (e) {
     console.error("gemini error", e);
     return reply("Something went wrong. Please try again.", 500);

@@ -392,20 +392,33 @@ export default function ScrollIndicator({ className = "" }: { className?: string
     return window.innerWidth < 768 || navigator.maxTouchPoints > 0;
   });
 
-  const handleScroll = () => {
-    window.scrollBy({
-      top: window.innerHeight * 0.85,
-      behavior: "smooth",
-    });
-  };
+  const [scrollY, setScrollY] = React.useState(0);
+
+  React.useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Fade out and translate upwards smoothly while scrolling so it never overlaps with the rising MacBook
+  const opacity = Math.max(0, Math.min(1, 1 - scrollY / 90));
+  const translateY = -Math.min(scrollY * 0.7, 60);
 
   return (
-    <div className={`absolute bottom-16 sm:bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-auto ${className}`}>
-      <button
-        type="button"
-        onClick={handleScroll}
-        aria-label="Scroll down"
-        className={`${monoFont.className} group relative inline-flex items-center justify-center text-xs sm:text-[13px] font-medium tracking-wide text-[#175fab] hover:text-[#60a5fa] transition-colors duration-300 cursor-pointer select-none bg-transparent border-0`}
+    <div
+      style={{
+        opacity,
+        transform: `translate(-50%, ${translateY}px)`,
+        pointerEvents: opacity < 0.05 ? "none" : "auto",
+        transition: "opacity 0.15s ease-out",
+        visibility: opacity <= 0 ? "hidden" : "visible",
+      }}
+      className={`absolute bottom-28 sm:bottom-32 md:bottom-36 left-1/2 z-20 ${className}`}
+    >
+      <div
+        className={`${monoFont.className} group relative inline-flex items-center justify-center text-xs sm:text-[13px] font-medium tracking-wide text-[#175fab] hover:text-[#60a5fa] transition-colors duration-300 select-none bg-transparent border-0`}
       >
         <span className="relative flex items-center justify-center drop-shadow-[0_0_12px_rgba(56,189,248,0.6)]">
           <FuzzyText
@@ -414,10 +427,10 @@ export default function ScrollIndicator({ className = "" }: { className?: string
             enableHover={!isMobile}
             fps={isMobile ? 30 : 60}
           >
-            Scroll
+            Tap Card
           </FuzzyText>
         </span>
-      </button>
+      </div>
     </div>
   );
 }

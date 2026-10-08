@@ -16,14 +16,26 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = useCallback((smooth = false) => {
+    if (chatScrollRef.current) {
+      if (smooth) {
+        chatScrollRef.current.scrollTo({
+          top: chatScrollRef.current.scrollHeight,
+          behavior: "smooth",
+        });
+      } else {
+        chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+      }
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+    }
   }, []);
 
   useEffect(() => {
     if (messages.length > 0) {
-      scrollToBottom();
+      scrollToBottom(false);
     }
   }, [messages, isLoading, scrollToBottom]);
 
@@ -38,6 +50,9 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
     setInputValue("");
     setIsLoading(true);
 
+    // Optimistically add empty assistant message for streaming
+    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
     try {
       const payload = JSON.stringify({
         messages: updatedMessages.map((m) => ({
@@ -48,54 +63,69 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
 
       let res = await fetch("/api", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: payload,
       });
 
       if (res.status === 404) {
         res = await fetch("/api/chat", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: payload,
         });
       }
 
       if (!res.ok) {
         let friendlyError = "Something went wrong. Please try again.";
-        if (res.status === 403) {
-          friendlyError = "Access forbidden. Request origin not allowed.";
-        } else if (res.status === 429) {
-          friendlyError = "Too many requests. Please wait a moment and try again.";
-        } else if (res.status === 500) {
-          friendlyError = "Something went wrong on the server. Please try again.";
-        }
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: friendlyError },
-        ]);
+        if (res.status === 403) friendlyError = "Access forbidden. Request origin not allowed.";
+        else if (res.status === 429) friendlyError = "Too many requests. Please wait a moment and try again.";
+        else if (res.status === 500) friendlyError = "Something went wrong on the server. Please try again.";
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = { role: "assistant", content: friendlyError };
+          return next;
+        });
         return;
       }
 
-      const data = await res.json();
-      const replyText =
-        typeof data?.reply === "string" ? data.reply : "No response received.";
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: replyText },
-      ]);
+      const contentType = res.headers.get("content-type") ?? "";
+
+      if (contentType.includes("text/plain") && res.body) {
+        // Streaming path: read chunks and progressively update the last message
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          accumulated += decoder.decode(value, { stream: true });
+          const current = accumulated;
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { role: "assistant", content: current };
+            return next;
+          });
+        }
+      } else {
+        // Fallback: legacy JSON path
+        const data = await res.json();
+        const replyText = typeof data?.reply === "string" ? data.reply : "No response received.";
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = { role: "assistant", content: replyText };
+          return next;
+        });
+      }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
+      setMessages((prev) => {
+        const next = [...prev];
+        next[next.length - 1] = {
           role: "assistant",
-          content:
-            "Unable to connect to Pixel. Please check your internet connection.",
-        },
-      ]);
+          content: "Unable to connect to Pixel. Please check your internet connection.",
+        };
+        return next;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -240,6 +270,7 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
 
           {/* Scrollable Conversation Thread */}
           <div
+            ref={chatScrollRef}
             className="chat-scroll"
             onWheel={(e) => e.stopPropagation()}
             style={{
@@ -287,7 +318,7 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
                 )}
                 <div
                   style={{
-                    maxWidth: isMobile ? "84%" : "78%",
+                    maxWidth: isMobile ? "88%" : "84%",
                     padding: isMobile ? "7px 11px" : "9px 13px",
                     borderRadius:
                       msg.role === "user"
@@ -314,7 +345,21 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
                         : "0 2px 8px rgba(0, 0, 0, 0.3)",
                   }}
                 >
-                  {msg.content}
+                  {msg.content || (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "2.5px",
+                        height: "14px",
+                      }}
+                    >
+                      <span className="lyrics-bar lyrics-bar-1" />
+                      <span className="lyrics-bar lyrics-bar-2" />
+                      <span className="lyrics-bar lyrics-bar-3" />
+                      <span className="lyrics-bar lyrics-bar-4" />
+                    </div>
+                  )}
                 </div>
                 {msg.role === "user" && (
                   /* eslint-disable-next-line @next/next/no-img-element */
@@ -336,63 +381,7 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
                 )}
               </div>
             ))}
-
-            {isLoading && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-start",
-                  alignItems: "flex-end",
-                  gap: "6px",
-                  width: "100%",
-                }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/siri.png"
-                  alt="Pixel"
-                  style={{
-                    width: isMobile ? "18px" : "20px",
-                    height: isMobile ? "18px" : "20px",
-                    borderRadius: "50%",
-                    objectFit: "contain",
-                    marginBottom: "2px",
-                    flexShrink: 0,
-                    filter:
-                      "drop-shadow(0 1px 4px rgba(168, 85, 247, 0.45))",
-                  }}
-                  draggable={false}
-                />
-                <div
-                  style={{
-                    padding: isMobile ? "7px 11px" : "9px 13px",
-                    borderRadius: "16px 16px 16px 4px",
-                    backgroundColor: "rgba(255, 255, 255, 0.08)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "7px",
-                    boxShadow: "0 2px 10px rgba(0, 0, 0, 0.3)",
-                  }}
-                >
-                  {/* Music equalizer wave bars */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "2.5px",
-                      height: "14px",
-                    }}
-                  >
-                    <span className="lyrics-bar lyrics-bar-1" />
-                    <span className="lyrics-bar lyrics-bar-2" />
-                    <span className="lyrics-bar lyrics-bar-3" />
-                    <span className="lyrics-bar lyrics-bar-4" />
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} style={{ height: "12px", minHeight: "12px", flexShrink: 0 }} />
           </div>
         </>
       )}
