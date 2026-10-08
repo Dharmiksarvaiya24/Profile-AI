@@ -196,6 +196,18 @@ const traceRoundedRect = (path, x, y, width, height, radius) => {
   path.bezierCurveTo(x, y + k, x + k, y, x + r, y);
 };
 
+// Pre-prime browser image cache immediately
+if (typeof window !== 'undefined') {
+  const p1 = new Image();
+  p1.crossOrigin = 'anonymous';
+  p1.decoding = 'async';
+  p1.src = '/card-front.webp';
+  const p2 = new Image();
+  p2.crossOrigin = 'anonymous';
+  p2.decoding = 'async';
+  p2.src = '/card-back.webp';
+}
+
 const loadImage = (cache, url) => {
   if (!url) return Promise.resolve(null);
   const cached = cache.get(url);
@@ -207,6 +219,9 @@ const loadImage = (cache, url) => {
     image.onload = () => resolve(image);
     image.onerror = () => resolve(null);
     image.src = url;
+    if (image.complete && image.naturalWidth > 0) {
+      resolve(image);
+    }
   });
   cache.set(url, promise);
   return promise;
@@ -966,18 +981,27 @@ const Lanyard = ({
       const imageKey = `${s.frontImage}|${s.backImage}|${s.strapImage}`;
       if (imageKey !== applied.imageKey) {
         const token = ++imageToken;
-        Promise.all([
-          loadImage(imageCache, s.frontImage),
-          loadImage(imageCache, s.backImage),
-          loadImage(imageCache, s.strapImage)
-        ]).then(([front, back, strap]) => {
-          if (!alive || token !== imageToken) return;
-          images.front = front;
-          images.back = back;
-          images.strap = strap;
-          paintFaces();
-          repaintStrap();
-        });
+        if (s.frontImage) {
+          loadImage(imageCache, s.frontImage).then((front) => {
+            if (!alive || token !== imageToken || !front) return;
+            images.front = front;
+            paintFaces();
+          });
+        }
+        if (s.backImage) {
+          loadImage(imageCache, s.backImage).then((back) => {
+            if (!alive || token !== imageToken || !back) return;
+            images.back = back;
+            paintFaces();
+          });
+        }
+        if (s.strapImage) {
+          loadImage(imageCache, s.strapImage).then((strap) => {
+            if (!alive || token !== imageToken || !strap) return;
+            images.strap = strap;
+            repaintStrap();
+          });
+        }
       }
       const faceKey = `${layoutKey}|${s.cardColor}|${s.imageFit}`;
       if (faceKey !== applied.faceKey) paintFaces();

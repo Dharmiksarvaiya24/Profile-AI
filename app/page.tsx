@@ -23,9 +23,8 @@ export default function Home() {
           className="pointer-events-auto relative flex items-center justify-center"
         >
           <Lanyard
-            frontImage="/card-front.png"
-            backImage="/card-back.png"
-            strapImage="/band.png"
+            frontImage="/card-front.webp"
+            backImage="/card-back.webp"
             cardColor="#0075ff"
             cornerRadius={0.35}
             size={0.38}

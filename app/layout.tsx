@@ -21,6 +21,8 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/profile.jpg" type="image/jpeg" />
         <link rel="apple-touch-icon" href="/profile.jpg" />
+        <link rel="preload" href="/card-front.webp" as="image" type="image/webp" fetchPriority="high" />
+        <link rel="preload" href="/card-back.webp" as="image" type="image/webp" fetchPriority="high" />
         <link rel="preload" href="/mac.glb" as="fetch" crossOrigin="anonymous" />
         <link rel="preload" href="/potsdamer_platz_1k.hdr" as="fetch" crossOrigin="anonymous" />
         <link rel="preload" href="/goldengate.jpg" as="image" />
