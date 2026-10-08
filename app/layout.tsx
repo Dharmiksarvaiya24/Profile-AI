@@ -21,8 +21,9 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/profile.jpg" type="image/jpeg" />
         <link rel="apple-touch-icon" href="/profile.jpg" />
-        <link rel="preload" as="model" href="/mac.glb" type="model/gltf-binary" crossOrigin="anonymous" />
-        <link rel="preload" as="image" href="/goldengate.jpg" type="image/jpeg" />
+        <link rel="preload" href="/mac.glb" as="fetch" crossOrigin="anonymous" />
+        <link rel="preload" href="/potsdamer_platz_1k.hdr" as="fetch" crossOrigin="anonymous" />
+        <link rel="preload" href="/goldengate.jpg" as="image" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet" />

@@ -8,16 +8,11 @@ const MacbookHero = dynamic(() => import("./MacbookHero"), {
   ssr: false,
 });
 
-// Preload GLB via drei cache at module level
+// Preload GLB via drei cache immediately at module level
 if (typeof window !== "undefined") {
-  // Preload via drei cache
-  if ("requestIdleCallback" in window) {
-    (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(() => {
-      useGLTF.preload("/mac.glb");
-    });
-  } else {
-    setTimeout(() => useGLTF.preload("/mac.glb"), 100);
-  }
+  useGLTF.preload("/mac.glb");
+  // Prefetch the chunk immediately
+  import("./MacbookHero");
 }
 
 export default function MacbookWrapper() {
