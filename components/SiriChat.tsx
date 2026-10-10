@@ -199,7 +199,7 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
           <h1
             style={{
               fontFamily:
-                '"Press Start 2P", "Pixelify Sans", cursive, monospace',
+                  'var(--font-press-start), var(--font-pixelify), "Press Start 2P", "Pixelify Sans", cursive, monospace',
               fontSize: isMobile ? "11px" : "17px",
               fontWeight: 700,
               letterSpacing: "0.02em",
@@ -254,7 +254,8 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
             <span
               style={{
                 fontFamily:
-                  '"Press Start 2P", "Pixelify Sans", cursive, monospace',
+                'var(--font-press-start), var(--font-pixelify), "Press Start 2P", "Pixelify Sans", cursive, monospace',
+              
                 fontSize: isMobile ? "9.5px" : "11px",
                 fontWeight: 700,
                 letterSpacing: "0.02em",

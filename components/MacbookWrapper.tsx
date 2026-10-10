@@ -1,36 +1,27 @@
 "use client";
- 
+
 import React, { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useGLTF } from "@react-three/drei";
 
 const MacbookHero = dynamic(() => import("./MacbookHero"), {
   ssr: false,
+  loading: () => null,
 });
 
-// Preload GLB via drei cache immediately at module level
-if (typeof window !== "undefined") {
-  useGLTF.preload("/mac.glb");
-  // Prefetch the chunk immediately
-  import("./MacbookHero");
-}
-
 export default function MacbookWrapper() {
-  const [shouldRender, setShouldRender] = useState(true);
+  const [shouldRender, setShouldRender] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Mount the 3D Canvas only once the section is near the viewport (800px margin)
   useEffect(() => {
-    // IntersectionObserver to only mount 3D Canvas when near viewport (800px margin)
     if (!containerRef.current) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setShouldRender(true);
-            observer.disconnect();
-          }
-        });
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldRender(true);
+          observer.disconnect();
+        }
       },
       { rootMargin: "800px" }
     );
@@ -39,6 +30,34 @@ export default function MacbookWrapper() {
 
     return () => {
       observer.disconnect();
+    };
+  }, []);
+
+  // Preload the GLB + 3D chunk on idle so it never blocks initial render
+  useEffect(() => {
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      import("./MacbookHero");
+      import("@react-three/drei").then((drei) => {
+        if (!cancelled) drei.useGLTF.preload("/mac.glb");
+      });
+    };
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(run);
+      return () => {
+        cancelled = true;
+        w.cancelIdleCallback?.(id);
+      };
+    }
+    const t = setTimeout(run, 1);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
     };
   }, []);
 
@@ -52,4 +71,3 @@ export default function MacbookWrapper() {
     </div>
   );
 }
-
