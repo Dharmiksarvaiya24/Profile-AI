@@ -392,28 +392,33 @@ export default function ScrollIndicator({ className = "" }: { className?: string
     return window.innerWidth < 768 || navigator.maxTouchPoints > 0;
   });
 
-  const [scrollY, setScrollY] = React.useState(0);
+  // Scroll position is applied directly to the DOM via a ref instead of React state,
+  // so scrolling never triggers a React re-render of this component.
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    const handleScroll = () => {
-      setScrollY(window.scrollY);
+    const apply = (scrollY: number) => {
+      const el = wrapperRef.current;
+      if (!el) return;
+      // Fade out and translate upwards smoothly while scrolling so it never overlaps with the rising MacBook
+      const opacity = Math.max(0, Math.min(1, 1 - scrollY / 90));
+      const translateY = -Math.min(scrollY * 0.7, 60);
+      el.style.opacity = String(opacity);
+      el.style.transform = `translate(-50%, ${translateY}px)`;
+      el.style.pointerEvents = opacity < 0.05 ? "none" : "auto";
+      el.style.visibility = opacity <= 0 ? "hidden" : "visible";
     };
+    apply(window.scrollY);
+    const handleScroll = () => apply(window.scrollY);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Fade out and translate upwards smoothly while scrolling so it never overlaps with the rising MacBook
-  const opacity = Math.max(0, Math.min(1, 1 - scrollY / 90));
-  const translateY = -Math.min(scrollY * 0.7, 60);
-
   return (
     <div
+      ref={wrapperRef}
       style={{
-        opacity,
-        transform: `translate(-50%, ${translateY}px)`,
-        pointerEvents: opacity < 0.05 ? "none" : "auto",
         transition: "opacity 0.15s ease-out",
-        visibility: opacity <= 0 ? "hidden" : "visible",
       }}
       className={`absolute bottom-28 sm:bottom-32 md:bottom-36 left-1/2 z-20 ${className}`}
     >

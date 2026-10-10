@@ -1,7 +1,7 @@
 import LightRaysWrapper from "@/components/LightRaysWrapper";
 import MacbookWrapper from "@/components/MacbookWrapper";
 import ScrollIndicator from "@/components/ScrollIndicator";
-import Lanyard from "@/components/Lanyard";
+import LanyardLoader from "@/components/LanyardLoader";
 
 export default function Home() {
   return (
@@ -22,7 +22,7 @@ export default function Home() {
           style={{ width: "100%", height: "100dvh" }}
           className="pointer-events-auto relative flex items-center justify-center"
         >
-          <Lanyard
+          <LanyardLoader
             frontImage="/card-front.webp"
             backImage="/card-back.webp"
             cardColor="#0075ff"
@@ -43,4 +43,3 @@ export default function Home() {
     </main>
   );
 }
-

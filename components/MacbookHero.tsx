@@ -84,11 +84,6 @@ export const BODY_NODE_NAME = "body";
 export const MODEL_PATH = "/mac.glb";
 export const WALLPAPER_PATH = "/goldengate.jpg";
 
-// Preload GLTF immediately
-if (typeof window !== "undefined") {
-  useGLTF.preload(MODEL_PATH);
-}
-
 // 7. Physical Lid Dimensions for Zoom Target Framing (all 4 bezels visible, keyboard excluded)
 export const TOTAL_LID_WIDTH = 31.48;
 export const TOTAL_LID_HEIGHT = 21.88;
@@ -1589,7 +1584,7 @@ export default function MacbookHero() {
   // Mobile: [1, 2] — cap at 2× so a 3× screen renders at 2× rather than 1.5×.
   // The extra fill-rate cost of going 1.5→2 is modest (~33% more pixels on the
   // fraction of frames that actually render) but the sharpness gain is large.
-  const canvasDpr = (isMobile ? [1, 2] : [1, 2]) as [number, number];
+  const canvasDpr: [number, number] = [1, 2];
 
   return (
     // Tall scroll wrapper (~300vh) driving the 3D scene animation
