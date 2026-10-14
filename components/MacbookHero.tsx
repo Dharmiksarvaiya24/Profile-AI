@@ -911,7 +911,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
   const [isReady, setIsReady] = useState(false);
 
   const { scene } = useGLTF(MODEL_PATH);
-  const { size, gl } = useThree();
+  const { size, gl, invalidate: requestFrame } = useThree();
   const rawAnisotropy = gl.capabilities.getMaxAnisotropy();
   const maxAnisotropy = isMobile ? Math.min(rawAnisotropy, 4) : rawAnisotropy;
 
@@ -1116,7 +1116,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
 
       // Pass raw (uncapped) anisotropy to the wallpaper texture so mobile screen
       // fonts are as sharp as possible regardless of the global mobile cap.
-      const wallpaperTexture = createMacOSWallpaperTexture(WALLPAPER_PATH, rawAnisotropy, undefined, isMobile);
+      const wallpaperTexture = createMacOSWallpaperTexture(WALLPAPER_PATH, rawAnisotropy, () => requestFrame(), isMobile);
       const planeGeo = new THREE.PlaneGeometry(screenW, screenH);
       const planeMat = new THREE.MeshBasicMaterial({
         map: wallpaperTexture,
@@ -1188,7 +1188,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [scene, onModelLoaded, isMobile, maxAnisotropy, envIntensityMobile, W, H]);
+  }, [scene, onModelLoaded, isMobile, maxAnisotropy, envIntensityMobile, W, H, requestFrame]);
 
   // On mobile: request render frame when ready or measurements change
   useEffect(() => {
@@ -1276,7 +1276,13 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
       currentZ = easeT * 0.3;
       currentScale = scale;
       shadowOp = baseShadowOp;
-      screenGlow = easeT * 0.4;
+      // Soft "screen-on" bloom at 90° lid angle: brief overshoot to 0.55 then settle to 0.4
+      const glowProgress = progress - 0.14;
+      if (glowProgress < 0.04) {
+        screenGlow = Math.min(0.55, glowProgress * 12.5 + 0.05);
+      } else {
+        screenGlow = Math.min(0.4, easeT * 0.5);
+      }
     } else if (progress <= 0.64) {
       // 0.52–0.64: Hold open MacBook state
       currentLidRotX = LID_OPEN_ROT;
@@ -1399,7 +1405,6 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
     return (
       <>
         <CameraController />
-        <Environment files="/potsdamer_platz_1k.hdr" background={false} />
         <ambientLight intensity={0.65} />
         <directionalLight position={[0, 6, 6]} intensity={1.1} />
         <pointLight position={[0, -2.5, -4]} color="#4A9EFF" intensity={1.8} distance={16} />
@@ -1417,9 +1422,6 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
   return (
     <>
       <CameraController />
-
-      {/* Local Studio Environment without external network latency */}
-      <Environment files="/potsdamer_platz_1k.hdr" background={false} />
 
       {/* Subtle soft blue rim light */}
       <pointLight
@@ -1475,6 +1477,8 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
   );
 }
 
+type WindowId = "education" | "siri" | "projects";
+
 export default function MacbookHero() {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef(0);
@@ -1489,6 +1493,27 @@ export default function MacbookHero() {
   const [isEducationOpen, setIsEducationOpen] = useState(false);
   const [isSiriOpen, setIsSiriOpen] = useState(false);
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
+
+  // Back-to-front order of the floating windows; the last entry is on top
+  const [windowOrder, setWindowOrder] = useState<WindowId[]>([
+    "education",
+    "siri",
+    "projects",
+  ]);
+  const bringToFront = useCallback((id: WindowId) => {
+    setWindowOrder((prev) => [...prev.filter((w) => w !== id), id]);
+  }, []);
+  const zIndexFor = (id: WindowId) => 11 + windowOrder.indexOf(id);
+
+  useEffect(() => {
+    if (isEducationOpen) bringToFront("education");
+  }, [isEducationOpen, bringToFront]);
+  useEffect(() => {
+    if (isSiriOpen) bringToFront("siri");
+  }, [isSiriOpen, bringToFront]);
+  useEffect(() => {
+    if (isProjectsOpen) bringToFront("projects");
+  }, [isProjectsOpen, bringToFront]);
 
   // References for mobile demand-driven scroll rendering pump
   const scrollPumpActiveRef = useRef(false);
@@ -1614,6 +1639,9 @@ export default function MacbookHero() {
           }}
         >
           <Suspense fallback={null}>
+            <Environment files="/potsdamer_platz_1k.hdr" background={false} />
+          </Suspense>
+          <Suspense fallback={null}>
             <MacbookModel
               scrollProgressRef={scrollProgressRef}
               scrollYRef={scrollYRef}
@@ -1638,18 +1666,24 @@ export default function MacbookHero() {
           onClose={() => setIsEducationOpen(false)}
           screenRectRef={screenRectRef}
           isMobile={isMobile}
+          zIndex={zIndexFor("education")}
+          onFocus={() => bringToFront("education")}
         />
         <SiriAI
           isOpen={isSiriOpen}
           onClose={() => setIsSiriOpen(false)}
           screenRectRef={screenRectRef}
           isMobile={isMobile}
+          zIndex={zIndexFor("siri")}
+          onFocus={() => bringToFront("siri")}
         />
         <ProjectsFinder
           isOpen={isProjectsOpen}
           onClose={() => setIsProjectsOpen(false)}
           screenRectRef={screenRectRef}
           isMobile={isMobile}
+          zIndex={zIndexFor("projects")}
+          onFocus={() => bringToFront("projects")}
         />
       </div>
     </div>

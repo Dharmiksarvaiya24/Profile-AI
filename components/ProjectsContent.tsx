@@ -56,6 +56,7 @@ export default function ProjectsContent({
               key={project.slug}
               onClick={() => onSelectFolder(project.slug)}
               title={project.displayName}
+              className="project-folder-item"
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -64,15 +65,7 @@ export default function ProjectsContent({
                 padding: "8px 6px",
                 borderRadius: "8px",
                 cursor: "pointer",
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
-                e.currentTarget.style.transform = "translateY(-1px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
-                e.currentTarget.style.transform = "translateY(0)";
+                transition: "transform 0.15s ease, background-color 0.15s ease",
               }}
             >
               {/* macOS Blue Folder Icon */}
@@ -156,38 +149,32 @@ export default function ProjectsContent({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "8px",
-              padding: "7px 14px",
-              borderRadius: "7px",
-              backgroundColor: "rgba(255, 255, 255, 0.07)",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
+              gap: "6px",
+              padding: "6px 14px",
+              borderRadius: "6px",
+              backgroundColor: "#24292E",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
               color: "#FFFFFF",
               fontSize: "12px",
-              fontWeight: 500,
+              fontWeight: 600,
               textDecoration: "none",
               cursor: "pointer",
-              transition: "all 0.15s ease",
+              transition: "transform 0.15s ease, box-shadow 0.15s ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.13)";
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.22)";
+              e.currentTarget.style.transform = "translateY(-1px)";
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.35)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.07)";
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "none";
             }}
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-              color="#FFFFFF"
-            >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
             </svg>
-            <span>Visit GitHub for more</span>
-            <span style={{ opacity: 0.5, fontSize: "11px" }}>↗</span>
+            <span>View all on GitHub</span>
+            <span style={{ fontSize: "11px", opacity: 0.8 }}>↗</span>
           </a>
         </div>
       </div>
@@ -315,6 +302,7 @@ export default function ProjectsContent({
                 onClick={() => {
                   window.open(project.liveUrl, "_blank", "noopener,noreferrer");
                 }}
+                className="project-action-btn project-live-btn"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -327,13 +315,7 @@ export default function ProjectsContent({
                   fontSize: "12px",
                   fontWeight: 600,
                   cursor: "pointer",
-                  transition: "all 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-1px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
+                  transition: "transform 0.15s ease, box-shadow 0.15s ease",
                 }}
               >
                 <span>Live</span>
@@ -350,6 +332,7 @@ export default function ProjectsContent({
                   showNotice("GitHub repository link coming soon");
                 }
               }}
+              className="project-action-btn project-github-btn"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -362,13 +345,7 @@ export default function ProjectsContent({
                 fontSize: "12px",
                 fontWeight: 600,
                 cursor: "pointer",
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-1px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0)";
+                transition: "transform 0.15s ease, box-shadow 0.15s ease",
               }}
             >
               <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
@@ -392,6 +369,27 @@ export default function ProjectsContent({
           {safeDescription}
         </p>
       </div>
+      <style jsx>{`
+        .project-folder-item:hover {
+          background-color: rgba(255, 255, 255, 0.08);
+          transform: translateY(-1px);
+        }
+        .project-cta-link:hover {
+          background-color: rgba(255, 255, 255, 0.13);
+          border-color: rgba(255, 255, 255, 0.22);
+          transform: translateY(-1px);
+        }
+        .project-action-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+        }
+        .project-live-btn:hover {
+          box-shadow: 0 4px 12px rgba(0, 113, 227, 0.4);
+        }
+        .project-github-btn:hover {
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+        }
+      `}</style>
     </div>
   );
 }

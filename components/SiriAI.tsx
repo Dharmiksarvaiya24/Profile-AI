@@ -9,6 +9,8 @@ export interface SiriAIProps {
   onClose: () => void;
   screenRectRef: React.MutableRefObject<ScreenRect | null>;
   isMobile: boolean;
+  zIndex?: number;
+  onFocus?: () => void;
 }
 
 type WindowState = "normal" | "maximized" | "minimized";
@@ -18,6 +20,8 @@ export default function SiriAI({
   onClose,
   screenRectRef,
   isMobile,
+  zIndex = 14,
+  onFocus,
 }: SiriAIProps) {
   const [windowState, setWindowState] = useState<WindowState>("normal");
   const [isRendered, setIsRendered] = useState(false);
@@ -192,7 +196,7 @@ export default function SiriAI({
         pointerEvents: "none",
         overflow: "hidden",
         borderRadius: "14px",
-        zIndex: 14, // Below MacDock (z-index 15), above Canvas
+        zIndex,
         willChange: "transform, width, height",
         opacity: 0,
         transition: "opacity 0.2s ease",
@@ -201,6 +205,7 @@ export default function SiriAI({
       {/* Floating macOS Siri AI Window */}
       <div
         ref={windowRef}
+        onMouseDown={() => onFocus?.()}
         style={{
           position: "absolute",
           ...(isMax
@@ -220,11 +225,11 @@ export default function SiriAI({
                 width: isMobile ? "95%" : "min(600px, 80%)",
                 height: isMobile ? "86%" : "min(460px, 76%)",
               }),
-          background: "rgba(0, 0, 0, 0.98)",
+          background: "rgba(30, 30, 32, 0.96)",
           backdropFilter: "blur(40px) saturate(180%)",
           WebkitBackdropFilter: "blur(40px) saturate(180%)",
-          borderRadius: isMobile ? "12px" : "16px",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
+          borderRadius: isMobile ? "12px" : "12px",
+          border: "1px solid rgba(255, 255, 255, 0.14)",
           boxShadow: [
             "0 22px 60px rgba(0,0,0,0.65)",
             "0 6px 18px rgba(0,0,0,0.40)",
@@ -250,8 +255,8 @@ export default function SiriAI({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           style={{
-            height: isMobile ? "34px" : "42px",
-            minHeight: isMobile ? "34px" : "42px",
+            height: isMobile ? "36px" : "44px",
+            minHeight: isMobile ? "36px" : "44px",
             background: "rgba(10, 10, 12, 0.95)",
             borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
             display: "flex",

@@ -10,6 +10,8 @@ export interface ProjectsFinderProps {
   onClose: () => void;
   screenRectRef: React.MutableRefObject<ScreenRect | null>;
   isMobile: boolean;
+  zIndex?: number;
+  onFocus?: () => void;
 }
 
 type WindowState = "normal" | "maximized" | "minimized";
@@ -19,6 +21,8 @@ export default function ProjectsFinder({
   onClose,
   screenRectRef,
   isMobile,
+  zIndex = 13,
+  onFocus,
 }: ProjectsFinderProps) {
   const [windowState, setWindowState] = useState<WindowState>("normal");
   const [isRendered, setIsRendered] = useState(false);
@@ -126,7 +130,7 @@ export default function ProjectsFinder({
         pointerEvents: "none",
         overflow: "hidden",
         borderRadius: "14px",
-        zIndex: 13, // Below MacDock (z-index 15)
+        zIndex,
         willChange: "transform, width, height",
         opacity: 0,
         transition: "opacity 0.2s ease",
@@ -135,6 +139,7 @@ export default function ProjectsFinder({
       {/* Floating macOS Finder Window */}
       <div
         ref={windowRef}
+        onMouseDown={() => onFocus?.()}
         style={{
           position: "absolute",
           ...(isMax
@@ -450,98 +455,7 @@ export default function ProjectsFinder({
             overflow: "hidden",
           }}
         >
-          {/* Left Sidebar (macOS style favorites) — compact width & spacing */}
-          {!isMobile && (
-            <div
-              style={{
-                width: "108px",
-                backgroundColor: "rgba(24, 24, 28, 0.65)",
-                borderRight: "1px solid rgba(255, 255, 255, 0.06)",
-                padding: "8px 5px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "2px",
-                fontSize: "11px",
-                fontFamily:
-                  '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "9.5px",
-                  fontWeight: 600,
-                  color: "rgba(255, 255, 255, 0.35)",
-                  padding: "0 4px 2px 4px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.03em",
-                }}
-              >
-                Favorites
-              </div>
-
-              {/* Active Projects Item */}
-              <div
-                onClick={() => setCurrentFolder("root")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "3px 6px",
-                  borderRadius: "5px",
-                  backgroundColor:
-                    currentFolder === "root"
-                      ? "rgba(0, 113, 227, 0.28)"
-                      : "transparent",
-                  color: currentFolder === "root" ? "#FFFFFF" : "rgba(255, 255, 255, 0.7)",
-                  fontWeight: currentFolder === "root" ? 600 : 400,
-                  cursor: "pointer",
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="#0071E3">
-                  <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.764a1.5 1.5 0 0 1 1.06.44L8.765 3.9A.5.5 0 0 0 9.12 4H13.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z" />
-                </svg>
-                <span>Projects</span>
-              </div>
-
-              {/* Recents */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "3px 6px",
-                  borderRadius: "5px",
-                  color: "rgba(255, 255, 255, 0.45)",
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <circle cx="8" cy="8" r="6" />
-                  <path d="M8 5v3l2 2" />
-                </svg>
-                <span>Recents</span>
-              </div>
-
-              {/* Applications */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "3px 6px",
-                  borderRadius: "5px",
-                  color: "rgba(255, 255, 255, 0.45)",
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <rect x="2" y="2" width="12" height="12" rx="2.5" />
-                  <path d="M5 8h6M8 5v6" />
-                </svg>
-                <span>Applications</span>
-              </div>
-            </div>
-          )}
-
-          {/* Right: Main File View */}
+          {/* Main File View */}
           <div
             style={{
               flex: 1,

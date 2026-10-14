@@ -142,7 +142,8 @@ export async function POST(req: Request) {
   }
 
   const candidateModels = [
-    requested === "gemini-flash-lite-latest" ? "gemini-3.5-flash" : requested,
+    requested,
+    "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
     "gemini-3.6-flash",
     "gemini-flash-lite-latest",
@@ -152,7 +153,6 @@ export async function POST(req: Request) {
       m !== "gemini-2.5-flash" &&
       m !== "gemini-2.0-flash" &&
       m !== "gemini-2.0-flash-lite" &&
-      m !== "gemini-3.5-flash-lite" &&
       arr.indexOf(m) === idx
   );
 
@@ -169,7 +169,6 @@ export async function POST(req: Request) {
             systemInstruction: SYSTEM,
             maxOutputTokens: MAX_OUTPUT_TOKENS,
             temperature: 0.3,
-            thinkingConfig: { thinkingBudget: 0 },
           },
         });
         if (streamResult) break;

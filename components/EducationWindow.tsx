@@ -9,6 +9,8 @@ export interface EducationWindowProps {
   onClose: () => void;
   screenRectRef: React.MutableRefObject<ScreenRect | null>;
   isMobile: boolean;
+  zIndex?: number;
+  onFocus?: () => void;
 }
 
 type WindowState = "normal" | "maximized" | "minimized";
@@ -18,6 +20,8 @@ export default function EducationWindow({
   onClose,
   screenRectRef,
   isMobile,
+  zIndex = 13,
+  onFocus,
 }: EducationWindowProps) {
   const [windowState, setWindowState] = useState<WindowState>("normal");
   const [isRendered, setIsRendered] = useState(false);
@@ -194,7 +198,7 @@ export default function EducationWindow({
         pointerEvents: "none",
         overflow: "hidden",
         borderRadius: "14px",
-        zIndex: 13, // Below MacDock (z-index 15), above Canvas
+        zIndex,
         willChange: "transform, width, height",
         opacity: 0,
         transition: "opacity 0.2s ease",
@@ -203,6 +207,7 @@ export default function EducationWindow({
       {/* Floating macOS Notes Window */}
       <div
         ref={windowRef}
+        onMouseDown={() => onFocus?.()}
         style={{
           position: "absolute",
           ...(isMax

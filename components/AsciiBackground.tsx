@@ -21,7 +21,7 @@ export function AsciiBackground({
   cellSize = 24,        // +18% for big screen (desktop: 24, mobile: strictly 18)
   mouseRadius = 140,
   charSet = DEFAULT_CHARS,
-  opacity = 1,
+  opacity = 0.4,
 }: AsciiBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mouseRef = useRef<{ x: number; y: number }>({ x: -9999, y: -9999 });
