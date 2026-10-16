@@ -36,8 +36,8 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/profile.jpg" type="image/jpeg" />
         <link rel="apple-touch-icon" href="/profile.jpg" />
-        <link rel="preload" href="/card-front.webp" as="image" type="image/webp" fetchPriority="high" />
-        <link rel="preload" href="/card-back.webp" as="image" type="image/webp" fetchPriority="high" />
+        <link rel="preload" href="/card-front.webp" as="image" type="image/webp" crossOrigin="anonymous" fetchPriority="high" />
+        <link rel="preload" href="/card-back.webp" as="image" type="image/webp" crossOrigin="anonymous" fetchPriority="high" />
       </head>
       <body className={`antialiased min-h-screen bg-[#0a0a0c] text-[#E6E4DE] ${pixelifySans.variable} ${pressStart2P.variable}`}>
         <Background />

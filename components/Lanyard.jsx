@@ -983,14 +983,14 @@ const Lanyard = ({
         const token = ++imageToken;
         if (s.frontImage) {
           loadImage(imageCache, s.frontImage).then((front) => {
-            if (!alive || token !== imageToken || !front) return;
+            if (!alive || token !== imageToken) return;
             images.front = front;
             paintFaces();
           });
         }
         if (s.backImage) {
           loadImage(imageCache, s.backImage).then((back) => {
-            if (!alive || token !== imageToken || !back) return;
+            if (!alive || token !== imageToken) return;
             images.back = back;
             paintFaces();
           });
@@ -1004,7 +1004,8 @@ const Lanyard = ({
         }
       }
       const faceKey = `${layoutKey}|${s.cardColor}|${s.imageFit}`;
-      if (faceKey !== applied.faceKey) paintFaces();
+      const facesPending = (s.frontImage && !images.front) || (s.backImage && !images.back);
+      if (faceKey !== applied.faceKey && !facesPending) paintFaces();
       if (s.strapColor !== applied.strapColor) repaintStrap();
 
       const finish = FINISHES[s.finish] || FINISHES.glossy;

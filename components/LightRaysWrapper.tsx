@@ -17,7 +17,7 @@ export default function LightRaysWrapper() {
       raysColor="#0073ed"
       raysSpeed={mobile ? 1.3 : 1.7}
       lightSpread={mobile ? 0.9 : 1.1}
-      rayLength={mobile ? 1.3 : 1.9}
+      rayLength={mobile ? 1.3 : 1.6}
       followMouse={false}
       mouseInfluence={0}
       noiseAmount={mobile ? 0 : 0.25}

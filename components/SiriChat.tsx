@@ -399,80 +399,27 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
           flexShrink: 0,
         }}
       >
-        {/* Animated Gradient Color Glow around text box (Visible only before first message) */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            opacity: messages.length === 0 ? 0.9 : 0,
-            pointerEvents: "none",
-            transition: "opacity 0.35s ease",
-            zIndex: 1,
-          }}
-        >
-          {/* Wide soft multicolor ambient glow */}
-          <div
-            style={{
-              position: "absolute",
-              inset: isMobile ? "-3.5px" : "-7px",
-              borderRadius: isMobile ? "23px" : "31px",
-              background:
-                "linear-gradient(120deg, #FF2E74 0%, #B829F7 25%, #2575FC 50%, #00E5FF 75%, #FF7A00 100%)",
-              backgroundSize: "300% 300%",
-              filter: isMobile ? "blur(7px)" : "blur(11px)",
-              opacity: 0.55,
-              animation: "siriGlowFlow 7s ease infinite",
-              pointerEvents: "none",
-            }}
-          />
-
-          {/* Soft tight rim glow */}
-          <div
-            style={{
-              position: "absolute",
-              inset: isMobile ? "-2px" : "-3px",
-              borderRadius: isMobile ? "22px" : "28px",
-              background:
-                "linear-gradient(120deg, #FF2E74 0%, #B829F7 25%, #2575FC 50%, #00E5FF 75%, #FF7A00 100%)",
-              backgroundSize: "300% 300%",
-              filter: isMobile ? "blur(2.5px)" : "blur(4.5px)",
-              opacity: 0.68,
-              animation: "siriGlowFlow 7s ease infinite",
-              pointerEvents: "none",
-            }}
-          />
-
-          {/* Crisp border gradient */}
-          <div
-            style={{
-              position: "absolute",
-              inset: "-1px",
-              borderRadius: isMobile ? "21px" : "26px",
-              background:
-                "linear-gradient(120deg, #FF2E74 0%, #B829F7 25%, #2575FC 50%, #00E5FF 75%, #FF7A00 100%)",
-              backgroundSize: "200% 200%",
-              opacity: 0.9,
-              animation: "siriGlowFlow 7s ease infinite",
-              pointerEvents: "none",
-            }}
-          />
-        </div>
-
-        {/* Chat Box Interior */}
+        {/* Chat Box Interior — true 1px gradient border, liquid glass inside */}
         <form
           onSubmit={handleSend}
           style={{
             position: "relative",
             width: "100%",
             height: isMobile ? "38px" : "50px",
-            backgroundColor: "#111116",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
+            backdropFilter: "blur(24px) saturate(180%)",
+            WebkitBackdropFilter: "blur(24px) saturate(180%)",
             borderRadius: isMobile ? "20px" : "25px",
             border:
               messages.length === 0
-                ? "1px solid rgba(255, 255, 255, 0.18)"
+                ? "1px solid transparent"
                 : "1px solid rgba(255, 255, 255, 0.14)",
+            background:
+              messages.length === 0
+                ? "linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)) padding-box, linear-gradient(120deg, #FF2E74 0%, #B829F7 25%, #2575FC 50%, #00E5FF 75%, #FF7A00 100%) border-box"
+                : "rgba(255, 255, 255, 0.08)",
+            backgroundSize: messages.length === 0 ? "100% 100%, 200% 200%" : undefined,
+            animation:
+              messages.length === 0 ? "siriGlowFlow 7s ease infinite" : undefined,
             display: "flex",
             alignItems: "center",
             padding: isMobile ? "0 5px 0 12px" : "0 8px 0 18px",
@@ -480,8 +427,8 @@ export default function SiriChat({ isMobile }: SiriChatProps) {
             zIndex: 2,
             boxShadow:
               messages.length === 0
-                ? "inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 8px 24px rgba(0, 0, 0, 0.55)"
-                : "inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 8px 24px rgba(0, 0, 0, 0.55)",
+                ? "inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 24px rgba(0, 0, 0, 0.55)"
+                : "inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.55)",
           }}
         >
           {/* Center: Input with placeholder */}

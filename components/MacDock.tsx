@@ -505,6 +505,7 @@ export default function MacDock({
                   (app.id === "siri-ai" && isSiriOpen) ||
                   (app.id === "finder" && isProjectsOpen)) && (
                   <div
+                    className="dock-running-dot"
                     style={{
                       position: "absolute",
                       bottom: "-5px",
@@ -513,8 +514,8 @@ export default function MacDock({
                       width: "3.5px",
                       height: "3.5px",
                       borderRadius: "50%",
-                      backgroundColor: "rgba(255, 255, 255, 0.85)",
-                      boxShadow: "0 0 3px rgba(255, 255, 255, 0.6)",
+                      backgroundColor: "rgba(255, 255, 255, 0.95)",
+                      boxShadow: "0 0 4px rgba(255, 255, 255, 0.75)",
                       pointerEvents: "none",
                     }}
                   />
@@ -561,6 +562,21 @@ export default function MacDock({
         [data-dock-item]:hover .dock-tooltip-label {
           opacity: 1 !important;
           transform: translateX(-50%) translateY(0px) !important;
+        }
+        [data-dock-item]:active {
+          transform: translate3d(0, 0, 0) scale(0.92) !important;
+        }
+        .dock-running-dot {
+          animation: dockDotBloom 220ms cubic-bezier(0.25, 1, 0.5, 1) forwards,
+            dockDotBreathe 2s ease-in-out infinite 220ms;
+        }
+        @keyframes dockDotBloom {
+          0% { transform: translateX(-50%) scale(0); opacity: 0; }
+          100% { transform: translateX(-50%) scale(1); opacity: 1; }
+        }
+        @keyframes dockDotBreathe {
+          0%, 100% { transform: translateX(-50%) scale(1); opacity: 1; }
+          50% { transform: translateX(-50%) scale(1.15); opacity: 0.85; }
         }
       `}</style>
     </div>

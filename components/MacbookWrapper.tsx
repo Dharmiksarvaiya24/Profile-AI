@@ -40,7 +40,9 @@ export default function MacbookWrapper() {
       if (cancelled) return;
       import("./MacbookHero");
       import("@react-three/drei").then((drei) => {
-        if (!cancelled) drei.useGLTF.preload("/mac.glb");
+        if (cancelled) return;
+        drei.useGLTF.preload("/mac.glb");
+        drei.useEnvironment.preload({ files: "/potsdamer_platz_1k.hdr" });
       });
     };
     const w = window as Window & {
