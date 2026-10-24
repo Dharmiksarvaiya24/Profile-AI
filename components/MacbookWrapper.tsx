@@ -8,9 +8,23 @@ const MacbookHero = dynamic(() => import("./MacbookHero"), {
   loading: () => null,
 });
 
+const IPhoneHero = dynamic(() => import("./IPhoneHero"), {
+  ssr: false,
+  loading: () => null,
+});
+
 export default function MacbookWrapper() {
   const [shouldRender, setShouldRender] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Detect mobile
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   // Mount the 3D Canvas only once the section is near the viewport (800px margin)
   useEffect(() => {
@@ -38,12 +52,21 @@ export default function MacbookWrapper() {
     let cancelled = false;
     const run = () => {
       if (cancelled) return;
-      import("./MacbookHero");
-      import("@react-three/drei").then((drei) => {
-        if (cancelled) return;
-        drei.useGLTF.preload("/mac.glb");
-        drei.useEnvironment.preload({ files: "/potsdamer_platz_1k.hdr" });
-      });
+      if (isMobile) {
+        import("./IPhoneHero");
+        import("@react-three/drei").then((drei) => {
+          if (cancelled) return;
+          drei.useGLTF.preload("/iphone_18.glb");
+          drei.useEnvironment.preload({ files: "/potsdamer_platz_1k.hdr" });
+        });
+      } else {
+        import("./MacbookHero");
+        import("@react-three/drei").then((drei) => {
+          if (cancelled) return;
+          drei.useGLTF.preload("/mac.glb");
+          drei.useEnvironment.preload({ files: "/potsdamer_platz_1k.hdr" });
+        });
+      }
     };
     const w = window as Window & {
       requestIdleCallback?: (cb: () => void) => number;
@@ -61,14 +84,21 @@ export default function MacbookWrapper() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, []);
+  }, [isMobile]);
 
   return (
     <div ref={containerRef} className="relative w-full">
       {shouldRender ? (
-        <MacbookHero />
+        isMobile ? (
+          <IPhoneHero />
+        ) : (
+          <MacbookHero />
+        )
       ) : (
-        <div className="relative w-full h-[300vh] pointer-events-none" />
+        <div
+          className="relative w-full pointer-events-none"
+          style={{ height: isMobile ? "280vh" : "300vh" }}
+        />
       )}
     </div>
   );

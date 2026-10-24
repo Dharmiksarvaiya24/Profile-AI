@@ -145,16 +145,19 @@ export default function ProjectsFinder({
           ...(isMax
             ? {
                 left: "10px",
-                top: isMobile ? "24px" : "32px",
+                // Mobile: stay below the Dynamic Island — the GLB's 3D island
+                // mesh reaches ~6.9% from the top → 9% safe top. Desktop:
+                // menu bar inset.
+                top: isMobile ? "9%" : "32px",
                 width: "calc(100% - 20px)",
-                height: isMobile ? "calc(100% - 74px)" : "calc(100% - 94px)",
+                height: isMobile ? "calc(91% - 50px)" : "calc(100% - 94px)",
               }
             : {
                 left: "50%",
-                top: "46%",
+                top: "50%",
                 transform: "translate(-50%, -50%)",
                 width: isMobile ? "92%" : "min(520px, 72%)",
-                height: isMobile ? "80%" : "min(380px, 68%)",
+                height: isMobile ? "76%" : "min(380px, 68%)",
               }),
           background: "rgba(30, 30, 34, 0.96)",
           backdropFilter: "blur(40px) saturate(180%)",

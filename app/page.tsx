@@ -2,6 +2,7 @@ import LightRaysWrapper from "@/components/LightRaysWrapper";
 import MacbookWrapper from "@/components/MacbookWrapper";
 import ScrollIndicator from "@/components/ScrollIndicator";
 import LanyardLoader from "@/components/LanyardLoader";
+import HeroFadeOnScroll from "@/components/HeroFadeOnScroll";
 
 export default function Home() {
   return (
@@ -22,19 +23,21 @@ export default function Home() {
           style={{ width: "100%", height: "100dvh" }}
           className="pointer-events-auto relative flex items-center justify-center"
         >
-          <LanyardLoader
-            frontImage="/card-front.webp"
-            backImage="/card-back.webp"
-            cardColor="#0075ff"
-            cornerRadius={0.35}
-            size={0.38}
-            strapColor="#000000"
-            strapWidth={0.85}
-            gravity={0.55}
-            damping={0.2}
-            elasticity={0.15}
-            breeze={0.45}
-          />
+          <HeroFadeOnScroll>
+            <LanyardLoader
+              frontImage="/card-front.webp"
+              backImage="/card-back.webp"
+              cardColor="#0075ff"
+              cornerRadius={0.35}
+              size={0.38}
+              strapColor="#000000"
+              strapWidth={0.85}
+              gravity={0.55}
+              damping={0.2}
+              elasticity={0.15}
+              breeze={0.45}
+            />
+          </HeroFadeOnScroll>
         </div>
 
         {/* Scroll Indicator placed within hero container so it scrolls away naturally */}

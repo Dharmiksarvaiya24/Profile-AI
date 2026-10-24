@@ -257,6 +257,13 @@ export default function MacDock({
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const rafIdRef = useRef<number | null>(null);
 
+  // Dock apps for this mode — the Trash bin is hidden in the iOS (iPhone) dock,
+  // shown unchanged in the macOS (MacBook) dock.
+  const apps = React.useMemo(
+    () => (isMobile ? DOCK_APPS.filter((app) => app.id !== "trash") : DOCK_APPS),
+    [isMobile]
+  );
+
   // ── Position the dock to match the 3D screen rect ──────────────────────
   const updatePosition = useCallback(() => {
     const dock = dockRef.current;
@@ -272,10 +279,18 @@ export default function MacDock({
     dock.style.opacity = "1";
     dock.style.pointerEvents = "auto";
 
-    // Compact dock scaling with screen boundary protection
-    const refWidth = 540;
-    const maxFitScale = (rect.width * 0.90) / 360;
-    const dockScale = Math.min(1.05, Math.max(0.25, Math.min(rect.width / refWidth, maxFitScale)));
+    // iOS-style dock: the glass bar spans a fixed fraction of the phone screen
+    // width, with icons sized proportionally inside it (matches real iOS look).
+    // Scale is derived from the dock's intrinsic (unscaled) layout width.
+    // iOS mode renders slightly larger; macOS (MacBook) behavior is unchanged.
+    const glass = dock.querySelector<HTMLElement>("[data-dock-glass]");
+    const baseW = glass ? glass.offsetWidth : 397;
+    const spanFrac = isMobile ? 0.94 : 0.90;
+    const maxDockScale = isMobile ? 1.25 : 1.05;
+    const dockScale = Math.min(
+      maxDockScale,
+      Math.max(0.25, (rect.width * spanFrac) / Math.max(1, baseW))
+    );
 
     // Position: bottom center of the screen rect, sitting close to the bottom bezel
     const bottomPadding = rect.height * 0.018;
@@ -283,7 +298,7 @@ export default function MacDock({
     const dockCenterX = rect.left + rect.width / 2;
 
     dock.style.transform = `translate3d(${dockCenterX}px, ${dockBottom}px, 0) translate(-50%, -100%) scale(${dockScale})`;
-  }, [screenRectRef]);
+  }, [screenRectRef, isMobile]);
 
   // ── Sync position on animation frame ──────────────────────────────────
   useEffect(() => {
@@ -396,32 +411,83 @@ export default function MacDock({
       aria-label="macOS Dock"
       role="toolbar"
     >
-      {/* Dock glass container — Sleek & Compact Liquid Glass (UNCHANGED) */}
+      {/* Floating premium label above the dock (iOS mode) */}
+      {isMobile && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginBottom: "10px",
+          }}
+        >
+          <div
+            style={{
+              width: "max-content",
+              padding: "5px 12px",
+              borderRadius: "999px",
+              background: "rgba(14, 10, 24, 0.55)",
+              backdropFilter: "blur(14px) saturate(160%)",
+              WebkitBackdropFilter: "blur(14px) saturate(160%)",
+              border: "0.5px solid rgba(255,255,255,0.14)",
+              boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+              color: "rgba(255,255,255,0.92)",
+              fontSize: "12px",
+              fontWeight: 500,
+              letterSpacing: "0.02em",
+              fontFamily:
+                '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
+            }}
+          >
+            Dharmik AI
+          </div>
+        </div>
+      )}
+
+      {/* Dock content column keeps the glass bar at the bottom anchor */}
       <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
+      {/* Dock glass container — Sleek & Compact Liquid Glass */}
+      <div
+        data-dock-glass="true"
         style={{
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "center",
-          gap: "8px",
-          padding: "5px 12px 6px",
-          borderRadius: "14px",
-          // Liquid Glass surface
-          background:
-            "linear-gradient(180deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.09) 100%)",
+          gap: isMobile ? "10px" : "8px",
+          padding: isMobile ? "8px 14px 9px" : "5px 12px 6px",
+          borderRadius: isMobile ? "18px" : "14px",
+          // Liquid Glass surface — purple-tinted on iOS, neutral on macOS
+          background: isMobile
+            ? "linear-gradient(180deg, rgba(126,98,206,0.24) 0%, rgba(64,44,116,0.32) 100%)"
+            : "linear-gradient(180deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.09) 100%)",
           backdropFilter: "blur(28px) saturate(200%)",
           WebkitBackdropFilter: "blur(28px) saturate(200%)",
           // Subtle inner border + highlight
-          border: "0.5px solid rgba(255,255,255,0.32)",
+          border: isMobile
+            ? "0.5px solid rgba(255,255,255,0.22)"
+            : "0.5px solid rgba(255,255,255,0.32)",
           // Glass shadow stack
-          boxShadow: [
-            "0 8px 28px rgba(0,0,0,0.38)",
-            "0 2px 8px rgba(0,0,0,0.20)",
-            "inset 0 1px 0 rgba(255,255,255,0.35)",
-            "inset 0 -0.5px 0 rgba(0,0,0,0.1)",
-          ].join(", "),
+          boxShadow: isMobile
+            ? [
+                "0 10px 32px rgba(0,0,0,0.35)",
+                "0 2px 10px rgba(0,0,0,0.18)",
+                "inset 0 1px 0 rgba(255,255,255,0.28)",
+                "inset 0 -0.5px 0 rgba(0,0,0,0.12)",
+              ].join(", ")
+            : [
+                "0 8px 28px rgba(0,0,0,0.38)",
+                "0 2px 8px rgba(0,0,0,0.20)",
+                "inset 0 1px 0 rgba(255,255,255,0.35)",
+                "inset 0 -0.5px 0 rgba(0,0,0,0.1)",
+              ].join(", "),
         }}
       >
-        {DOCK_APPS.map((app, index) => (
+        {apps.map((app, index) => (
           <React.Fragment key={app.id}>
             {/* Native macOS separator line before Trash */}
             {app.id === "trash" && (
@@ -555,6 +621,7 @@ export default function MacDock({
             </div>
           </React.Fragment>
         ))}
+      </div>
       </div>
 
       {/* CSS for tooltip hover — scoped to dock items */}

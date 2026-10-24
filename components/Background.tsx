@@ -85,9 +85,10 @@ export function Background({
           }}
         />
 
-        {/* ASCII Character Scatter Background */}
+        {/* ASCII Character Scatter Background — kept very subtle so it adds
+            depth behind the device without competing with it */}
         {resolvedShowAscii && (
-          <AsciiBackground className="absolute inset-0 w-full h-full" />
+          <AsciiBackground className="absolute inset-0 w-full h-full" opacity={0.16} />
         )}
 
         {/* Procedural film grain noise overlay */}
