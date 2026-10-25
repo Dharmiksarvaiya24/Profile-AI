@@ -155,11 +155,17 @@ export default function EducationWindow({
     const deltaX = e.clientX - dragRef.current.startX;
     const deltaY = e.clientY - dragRef.current.startY;
 
-    const maxLeft = Math.max(0, container.clientWidth - win.clientWidth);
-    const maxTop = Math.max(30, container.clientHeight - win.clientHeight - 50);
+    // Mobile: keep the window below the Dynamic Island — the GLB's 3D island
+    // mesh reaches ~6.9% from the top → 9% top bound. Desktop: 28px inset.
+    const minTop = isMobile ? container.clientHeight * 0.09 : 28;
+    const maxTop = Math.max(
+      isMobile ? minTop : 30,
+      container.clientHeight - win.clientHeight - 50
+    );
 
+    const maxLeft = Math.max(0, container.clientWidth - win.clientWidth);
     const newLeft = Math.min(maxLeft, Math.max(0, dragRef.current.initialLeft + deltaX));
-    const newTop = Math.min(maxTop, Math.max(28, dragRef.current.initialTop + deltaY));
+    const newTop = Math.min(maxTop, Math.max(minTop, dragRef.current.initialTop + deltaY));
 
     setWindowPos({ x: newLeft, y: newTop });
   };
@@ -213,19 +219,22 @@ export default function EducationWindow({
           ...(isMax
             ? {
                 left: "12px",
-                top: "32px",
+                // Mobile: stay below the Dynamic Island — the GLB's 3D island
+                // mesh reaches ~6.9% from the top → 9% safe top. Desktop:
+                // menu bar inset.
+                top: isMobile ? "9%" : "32px",
                 width: "calc(100% - 24px)",
-                height: "calc(100% - 94px)",
+                height: isMobile ? "calc(91% - 62px)" : "calc(100% - 94px)",
               }
             : {
                 left: windowPos.x !== null ? `${windowPos.x}px` : "50%",
-                top: windowPos.y !== null ? `${windowPos.y}px` : "46%",
+                top: windowPos.y !== null ? `${windowPos.y}px` : "50%",
                 transform:
                   windowPos.x !== null
                     ? "none"
                     : "translate(-50%, -50%)",
                 width: isMobile ? "92%" : "min(460px, 64%)",
-                height: isMobile ? "78%" : "min(530px, 75%)",
+                height: isMobile ? "76%" : "min(530px, 75%)",
               }),
           background: "rgba(30, 30, 32, 0.96)",
           backdropFilter: "blur(40px) saturate(180%)",
