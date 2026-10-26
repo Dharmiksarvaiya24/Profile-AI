@@ -194,19 +194,28 @@ function createIOSWallpaperTexture(
     ctx.arc(diX + diW - diH / 2, diY + diH / 2, 10, 0, Math.PI * 2);
     ctx.fill();
 
-    // 3b. Clock — top left, semibold, aligned to the island's center line
+    // 3b. DND moon icon — left of island, vertically centered on baseY
     {
-      const now = new Date();
-      const h12 = now.getHours() % 12 || 12;
-      const timeStr = `${h12}:${now
-        .getMinutes()
-        .toString()
-        .padStart(2, "0")}`;
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
+      const moonX = 96;      // horizontal center of the moon
+      const moonY = baseY;   // same vertical center as the island
+      const moonR = 18;      // outer circle radius
+
+      ctx.save();
       ctx.fillStyle = "#ffffff";
-      ctx.font = `600 40px -apple-system, "SF Pro Text", sans-serif`;
-      ctx.fillText(timeStr, 96, baseY);
+
+      // Draw crescent: full circle clipped by an offset circle to carve out the crescent shape
+      ctx.beginPath();
+      ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Carve out inner circle (offset right+up slightly) to form crescent
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath();
+      ctx.arc(moonX + moonR * 0.55, moonY - moonR * 0.1, moonR * 0.82, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalCompositeOperation = "source-over";
+      ctx.restore();
     }
 
     // 4. Cellular signal + battery — premium iOS status cluster, top right,
@@ -625,6 +634,97 @@ type WindowId = "education" | "siri" | "projects";
 // ============================================================================
 // IPhoneHero — Main Export
 // ============================================================================
+// ============================================================================
+// iOS Lock-Screen Clock Overlay
+// ============================================================================
+function IOSClock({
+  screenRectRef,
+}: {
+  screenRectRef: React.MutableRefObject<ScreenRect | null>;
+}) {
+  const clockRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
+  const [time, setTime] = useState(() => new Date());
+
+  // Tick every second
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Track screen rect each frame
+  useEffect(() => {
+    const update = () => {
+      const el = clockRef.current;
+      const sr = screenRectRef.current;
+      if (el && sr) {
+        const centerX = sr.left + sr.width / 2;
+        // Position in the upper-center ~28% from the top of the screen
+        const topY = sr.top + sr.height * 0.18;
+        el.style.left = `${centerX}px`;
+        el.style.top = `${topY}px`;
+        el.style.opacity = sr.visible ? "1" : "0";
+      }
+      rafRef.current = requestAnimationFrame(update);
+    };
+    rafRef.current = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [screenRectRef]);
+
+  const h12 = time.getHours() % 12 || 12;
+  const minutes = time.getMinutes().toString().padStart(2, "0");
+  const dayName = time.toLocaleDateString("en-US", { weekday: "short" });
+  const month = time.toLocaleDateString("en-US", { month: "short" });
+  const day = time.getDate();
+
+  return (
+    <div
+      ref={clockRef}
+      style={{
+        position: "absolute",
+        transform: "translate(-50%, -50%)",
+        zIndex: 16,
+        pointerEvents: "none",
+        textAlign: "center",
+        opacity: 0,
+        transition: "opacity 0.4s ease",
+        userSelect: "none",
+      }}
+    >
+      {/* Date line */}
+      <div
+        style={{
+          color: "rgba(255,255,255,0.92)",
+          fontSize: "clamp(10px, 2vw, 16px)",
+          fontWeight: 500,
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif',
+          letterSpacing: "0.01em",
+          marginBottom: "2px",
+          textShadow: "0 1px 8px rgba(0,0,0,0.55)",
+        }}
+      >
+        {dayName} {day} {month}
+      </div>
+      {/* Big time */}
+      <div
+        style={{
+          color: "#ffffff",
+          fontSize: "clamp(38px, 9vw, 72px)",
+          fontWeight: 700,
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif',
+          letterSpacing: "-0.025em",
+          lineHeight: 1,
+          textShadow: "0 2px 24px rgba(0,0,0,0.45)",
+        }}
+      >
+        {h12}:{minutes}
+      </div>
+    </div>
+  );
+}
+
 export default function IPhoneHero() {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef(0);
@@ -759,6 +859,9 @@ export default function IPhoneHero() {
             />
           </Suspense>
         </Canvas>
+
+        {/* iOS Lock-Screen Clock */}
+        <IOSClock screenRectRef={screenRectRef} />
 
         {/* iOS-style Dock */}
         <MacDock

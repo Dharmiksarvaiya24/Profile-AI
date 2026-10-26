@@ -411,37 +411,7 @@ export default function MacDock({
       aria-label="macOS Dock"
       role="toolbar"
     >
-      {/* Floating premium label above the dock (iOS mode) */}
-      {isMobile && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            marginBottom: "10px",
-          }}
-        >
-          <div
-            style={{
-              width: "max-content",
-              padding: "5px 12px",
-              borderRadius: "999px",
-              background: "rgba(14, 10, 24, 0.55)",
-              backdropFilter: "blur(14px) saturate(160%)",
-              WebkitBackdropFilter: "blur(14px) saturate(160%)",
-              border: "0.5px solid rgba(255,255,255,0.14)",
-              boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
-              color: "rgba(255,255,255,0.92)",
-              fontSize: "12px",
-              fontWeight: 500,
-              letterSpacing: "0.02em",
-              fontFamily:
-                '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif',
-            }}
-          >
-            Dharmik AI
-          </div>
-        </div>
-      )}
+
 
       {/* Dock content column keeps the glass bar at the bottom anchor */}
       <div
