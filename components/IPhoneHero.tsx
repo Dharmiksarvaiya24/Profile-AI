@@ -683,7 +683,7 @@ function IOSClock({
       style={{
         position: "absolute",
         transform: "translate(-50%, -50%)",
-        zIndex: 16,
+        zIndex: 9,
         pointerEvents: "none",
         textAlign: "center",
         opacity: 0,
