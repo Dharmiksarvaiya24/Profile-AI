@@ -387,13 +387,13 @@ export const FuzzyText: React.FC<FuzzyTextProps> = ({
 };
 
 export default function ScrollIndicator({ className = "" }: { className?: string }) {
-  const [isMobile, setIsMobile] = React.useState<boolean>(false);
-
   // Detect phone after mount so the server/client markup always matches on
   // the first render (avoids a hydration mismatch when hiding the hint).
-  React.useEffect(() => {
-    setIsMobile(window.innerWidth < 768 || navigator.maxTouchPoints > 0);
-  }, []);
+  const isMobile = React.useSyncExternalStore(
+    () => () => {},
+    () => (typeof window !== "undefined" ? window.innerWidth < 768 || navigator.maxTouchPoints > 0 : false),
+    () => false
+  );
 
   // Scroll position is applied directly to the DOM via a ref instead of React state,
   // so scrolling never triggers a React re-render of this component.

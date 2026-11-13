@@ -6,7 +6,7 @@ import EducationWindow from "./EducationWindow";
 import SiriAI from "./SiriAI";
 import ProjectsFinder from "./ProjectsFinder";
 import { Canvas, useFrame, useThree, invalidate } from "@react-three/fiber";
-import { useGLTF, Environment, ContactShadows } from "@react-three/drei";
+import { useGLTF, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -700,7 +700,6 @@ function createMacOSWallpaperTexture(
         const siriW = siriR * 2;
 
         const ccW = Math.round(32 * s * fontBoost);
-        const ccH = Math.round(23 * s * fontBoost);
 
         const btW = Math.round(18 * s * fontBoost);
         const btH = Math.round(28 * s * fontBoost);
@@ -1188,7 +1187,7 @@ function MacbookModel({ scrollProgressRef, scrollYRef, onModelLoaded, isMobile, 
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [scene, onModelLoaded, isMobile, maxAnisotropy, envIntensityMobile, W, H, requestFrame]);
+  }, [scene, onModelLoaded, isMobile, maxAnisotropy, rawAnisotropy, scale, envIntensityMobile, W, H, requestFrame]);
 
   // On mobile: request render frame when ready or measurements change
   useEffect(() => {
@@ -1557,17 +1556,14 @@ export default function MacbookHero() {
     };
   }, []);
 
-  // Keep scrollYRef in sync via passive listener — triggers frame pump on mobile
+  // Keep scrollYRef in sync via passive listener (ScrollTrigger onUpdate drives rendering)
   useEffect(() => {
     const onScroll = () => {
       scrollYRef.current = window.scrollY;
-      if (isMobile) {
-        triggerMobileScrollRender();
-      }
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [isMobile, triggerMobileScrollRender]);
+  }, []);
 
   const handleModelLoaded = React.useCallback(() => {
     // Defer refresh to avoid layout thrash on model load
@@ -1638,9 +1634,6 @@ export default function MacbookHero() {
             fov: CAMERA_FOV,
           }}
         >
-          <Suspense fallback={null}>
-            <Environment files="/potsdamer_platz_1k.hdr" background={false} />
-          </Suspense>
           <Suspense fallback={null}>
             <MacbookModel
               scrollProgressRef={scrollProgressRef}
