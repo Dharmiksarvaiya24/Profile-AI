@@ -9,7 +9,7 @@ import React, {
   useCallback,
 } from "react";
 import { Canvas, useFrame, useThree, invalidate } from "@react-three/fiber";
-import { useGLTF, Environment, ContactShadows } from "@react-three/drei";
+import { useGLTF, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -84,7 +84,6 @@ function createIOSWallpaperTexture(
     dy = 0,
     dw = 0,
     dh = 0;
-  let ticker: ReturnType<typeof setInterval> | null = null;
 
   // Full redraw of the lock screen. Runs on image load and every 30s to
   // keep the clock live. The cover-fit wallpaper fills the entire canvas,
@@ -306,14 +305,12 @@ function CameraController() {
 // ============================================================================
 interface IPhoneSceneProps {
   scrollProgressRef: React.MutableRefObject<number>;
-  scrollYRef: React.MutableRefObject<number>;
   onModelLoaded: () => void;
   screenRectRef: React.MutableRefObject<ScreenRect | null>;
 }
 
 function IPhoneModel({
   scrollProgressRef,
-  scrollYRef,
   onModelLoaded,
   screenRectRef,
 }: IPhoneSceneProps) {
@@ -652,18 +649,28 @@ function IOSClock({
     return () => clearInterval(id);
   }, []);
 
-  // Track screen rect each frame
+  const lastVisibleRef = useRef<boolean>(false);
+
+  // Track screen rect each frame using hardware-accelerated transforms
   useEffect(() => {
     const update = () => {
       const el = clockRef.current;
       const sr = screenRectRef.current;
       if (el && sr) {
-        const centerX = sr.left + sr.width / 2;
-        // Position in the upper-center ~28% from the top of the screen
-        const topY = sr.top + sr.height * 0.18;
-        el.style.left = `${centerX}px`;
-        el.style.top = `${topY}px`;
-        el.style.opacity = sr.visible ? "1" : "0";
+        if (!sr.visible) {
+          if (lastVisibleRef.current) {
+            el.style.opacity = "0";
+            lastVisibleRef.current = false;
+          }
+        } else {
+          if (!lastVisibleRef.current) {
+            el.style.opacity = "1";
+            lastVisibleRef.current = true;
+          }
+          const centerX = sr.left + sr.width / 2;
+          const topY = sr.top + sr.height * 0.18;
+          el.style.transform = `translate3d(${centerX}px, ${topY}px, 0) translate(-50%, -50%)`;
+        }
       }
       rafRef.current = requestAnimationFrame(update);
     };
@@ -682,13 +689,16 @@ function IOSClock({
       ref={clockRef}
       style={{
         position: "absolute",
-        transform: "translate(-50%, -50%)",
+        top: 0,
+        left: 0,
+        transform: "translate3d(0, 0, 0) translate(-50%, -50%)",
         zIndex: 9,
         pointerEvents: "none",
         textAlign: "center",
         opacity: 0,
         transition: "opacity 0.4s ease",
         userSelect: "none",
+        contain: "layout style paint",
       }}
     >
       {/* Date line */}
@@ -778,15 +788,14 @@ export default function IPhoneHero() {
     }, 120);
   }, []);
 
-  // Scroll listener
+  // Scroll listener — updates scrollYRef; rendering is driven by ScrollTrigger onUpdate
   useEffect(() => {
     const onScroll = () => {
       scrollYRef.current = window.scrollY;
-      triggerScrollRender();
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [triggerScrollRender]);
+  }, []);
 
   const handleModelLoaded = useCallback(() => {
     requestAnimationFrame(() => {
@@ -848,12 +857,8 @@ export default function IPhoneHero() {
           }}
         >
           <Suspense fallback={null}>
-            <Environment files="/potsdamer_platz_1k.hdr" background={false} />
-          </Suspense>
-          <Suspense fallback={null}>
             <IPhoneModel
               scrollProgressRef={scrollProgressRef}
-              scrollYRef={scrollYRef}
               onModelLoaded={handleModelLoaded}
               screenRectRef={screenRectRef}
             />

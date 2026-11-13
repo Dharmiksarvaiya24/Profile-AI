@@ -2,22 +2,6 @@
 
 import React, { useEffect, useRef, useCallback, useState } from "react";
 
-// ============================================================================
-// MacDock — Premium macOS Liquid Glass Dock
-// Self-contained component: all markup, styling, icons, hover/magnification,
-// tooltips, and interaction logic live here.
-//
-// Integration: MacbookHero passes screenRectRef each frame with the
-// projected screen bounding box in CSS pixels. MacDock positions itself
-// inside that box at the bottom center.
-//
-// Performance:
-//  - No React state for pointer movement
-//  - GPU-composited transforms only (translate3d + scale)
-//  - Pointer capability detection: hover logic skipped on touch devices
-//  - Runtime PNG normalization: measured ONCE per image, cached, zero RAF overhead
-//  - Cleanup: all listeners removed on unmount
-// ============================================================================
 
 export interface ScreenRect {
   left: number;
@@ -72,7 +56,7 @@ const PRECOMPUTED_BOUNDS: Record<string, { w: number; h: number; minX: number; m
   "/dock/mail.png":     { w: 256, h: 256, minX: 0,  minY: 0,  maxX: 255, maxY: 255 },
   "/dock/linkedin.png": { w: 512, h: 512, minX: 0,  minY: 0,  maxX: 511, maxY: 511 },
   "/dock/github.png":   { w: 512, h: 512, minX: 0,  minY: 0,  maxX: 511, maxY: 511 },
-  "/dock/siri.png":     { w: 1024, h: 1024, minX: 0, minY: 0, maxX: 1023, maxY: 1023 },
+  "/dock/siri.png":     { w: 256, h: 256, minX: 0, minY: 0, maxX: 255, maxY: 255 },
   "/dock/pages.png":    { w: 264, h: 264, minX: 0,  minY: 0,  maxX: 263, maxY: 263 },
   "/dock/trash.png":    { w: 128, h: 128, minX: 18, minY: 14, maxX: 111, maxY: 120 },
 };
@@ -209,6 +193,7 @@ const NormalizedIcon = React.memo(function NormalizedIcon({
         position: "relative",
       }}
     >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
         alt={alt}
@@ -256,6 +241,21 @@ export default function MacDock({
   const dockRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const rafIdRef = useRef<number | null>(null);
+  const baseWRef = useRef<number>(397);
+  const lastVisibleRef = useRef<boolean>(false);
+
+  // Measure and cache intrinsic dock glass width once on mount/resize (avoids 120 FPS layout thrashing)
+  useEffect(() => {
+    const measure = () => {
+      const glass = dockRef.current?.querySelector<HTMLElement>("[data-dock-glass]");
+      if (glass && glass.offsetWidth > 0) {
+        baseWRef.current = glass.offsetWidth;
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure, { passive: true });
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   // Dock apps for this mode — the Trash bin is hidden in the iOS (iPhone) dock,
   // shown unchanged in the macOS (MacBook) dock.
@@ -271,20 +271,24 @@ export default function MacDock({
     if (!dock || !rect) return;
 
     if (!rect.visible || rect.width < 10) {
-      dock.style.opacity = "0";
-      dock.style.pointerEvents = "none";
+      if (lastVisibleRef.current) {
+        dock.style.opacity = "0";
+        dock.style.pointerEvents = "none";
+        lastVisibleRef.current = false;
+      }
       return;
     }
 
-    dock.style.opacity = "1";
-    dock.style.pointerEvents = "auto";
+    if (!lastVisibleRef.current) {
+      dock.style.opacity = "1";
+      dock.style.pointerEvents = "auto";
+      lastVisibleRef.current = true;
+    }
 
     // iOS-style dock: the glass bar spans a fixed fraction of the phone screen
     // width, with icons sized proportionally inside it (matches real iOS look).
     // Scale is derived from the dock's intrinsic (unscaled) layout width.
-    // iOS mode renders slightly larger; macOS (MacBook) behavior is unchanged.
-    const glass = dock.querySelector<HTMLElement>("[data-dock-glass]");
-    const baseW = glass ? glass.offsetWidth : 397;
+    const baseW = baseWRef.current || 397;
     const spanFrac = isMobile ? 0.94 : 0.90;
     const maxDockScale = isMobile ? 1.25 : 1.05;
     const dockScale = Math.min(
