@@ -57,14 +57,12 @@ export default function MacbookWrapper() {
         import("@react-three/drei").then((drei) => {
           if (cancelled) return;
           drei.useGLTF.preload("/iphone_18.glb");
-          drei.useEnvironment.preload({ files: "/potsdamer_platz_1k.hdr" });
         });
       } else {
         import("./MacbookHero");
         import("@react-three/drei").then((drei) => {
           if (cancelled) return;
           drei.useGLTF.preload("/mac.glb");
-          drei.useEnvironment.preload({ files: "/potsdamer_platz_1k.hdr" });
         });
       }
     };

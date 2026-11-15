@@ -70,21 +70,23 @@ export default function SiriAI({
 
   // Entrance & Exit transitions
   useEffect(() => {
+    let timer: NodeJS.Timeout;
     if (isOpen) {
-      setIsRendered(true);
-      setWindowState("normal");
-      setWindowPos({ x: null, y: null });
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
+        setIsRendered(true);
+        setWindowState("normal");
+        setWindowPos({ x: null, y: null });
         setIsVisible(true);
-      }, 20);
-      return () => clearTimeout(timer);
+      }, 10);
     } else {
-      setIsVisible(false);
-      const timer = setTimeout(() => {
-        setIsRendered(false);
-      }, 220);
-      return () => clearTimeout(timer);
+      timer = setTimeout(() => {
+        setIsVisible(false);
+        setTimeout(() => {
+          setIsRendered(false);
+        }, 200);
+      }, 0);
     }
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   // RAF sync only when rendered

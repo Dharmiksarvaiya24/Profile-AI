@@ -67,22 +67,23 @@ export default function EducationWindow({
 
   // Handle open/close animations
   useEffect(() => {
+    let timer: NodeJS.Timeout;
     if (isOpen) {
-      setIsRendered(true);
-      setWindowState("normal");
-      // Short delay for entrance transition
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
+        setIsRendered(true);
+        setWindowState("normal");
         setIsVisible(true);
-      }, 20);
-      return () => clearTimeout(timer);
+      }, 10);
     } else {
-      setIsVisible(false);
-      const timer = setTimeout(() => {
-        setIsRendered(false);
-        setWindowPos({ x: null, y: null });
-      }, 220);
-      return () => clearTimeout(timer);
+      timer = setTimeout(() => {
+        setIsVisible(false);
+        setTimeout(() => {
+          setIsRendered(false);
+          setWindowPos({ x: null, y: null });
+        }, 200);
+      }, 0);
     }
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   // Run position sync RAF only while rendered and visible

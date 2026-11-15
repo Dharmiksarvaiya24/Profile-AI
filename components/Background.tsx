@@ -91,9 +91,9 @@ export function Background({
           <AsciiBackground className="absolute inset-0 w-full h-full" opacity={0.16} />
         )}
 
-        {/* Procedural film grain noise overlay */}
+        {/* Procedural film grain noise overlay — desktop only to save full-viewport mobile repaints */}
         <svg
-          className="absolute inset-0 h-full w-full"
+          className="absolute inset-0 h-full w-full hidden md:block"
           style={{ opacity: resolvedOpacity, mixBlendMode: resolvedBlendMode }}
           xmlns="http://www.w3.org/2000/svg"
         >

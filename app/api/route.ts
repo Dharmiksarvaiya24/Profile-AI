@@ -53,42 +53,10 @@ const SUSPICIOUS = [
   /\b(according to your hidden|according to your system|from your internal)\b/i,
 ];
 
-// ---------- Output check ----------
-const ALLOWED_HOSTS = [
-  "dharmik.engineer",
-  "github.com",
-  "linkedin.com",
-  "tridentdesigning.in",
-];
-
-function replyLooksSafe(text: string) {
-  if (!text || text.length > 4000) return false;
-  if (text.includes(CANARY)) return false;
-  if (text.includes("```")) return false;
-  if (/<script|<iframe|javascript:/i.test(text)) return false;
-
-  const urls = text.match(/https?:\/\/[^\s)]+/gi) ?? [];
-  for (const u of urls) {
-    try {
-      const host = new URL(u).hostname.replace(/^www\./, "");
-      if (!ALLOWED_HOSTS.some((h) => host === h || host.endsWith("." + h))) return false;
-    } catch {
-      return false;
-    }
-  }
-  return true;
-}
-
 const reply = (text: string, status = 200) =>
   new Response(JSON.stringify({ reply: text }), {
     status,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-  });
-
-const streamReply = (text: string) =>
-  new Response(text, {
-    status: 200,
-    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
   });
 
 export async function POST(req: Request) {
@@ -121,7 +89,12 @@ export async function POST(req: Request) {
     return reply("Bad request", 400);
   }
 
-  let history = body.messages.slice(-MAX_TURNS).map((m: any) => ({
+  interface InputMessage {
+    role?: string;
+    content?: string;
+  }
+
+  const history = body.messages.slice(-MAX_TURNS).map((m: InputMessage) => ({
     role: m?.role === "assistant" ? "model" : "user",
     parts: [{ text: String(m?.content ?? "").slice(0, MAX_CHARS) }],
   }));
@@ -157,8 +130,8 @@ export async function POST(req: Request) {
   );
 
   try {
-    let streamResult: any = null;
-    let lastErr: any = null;
+    let streamResult: Awaited<ReturnType<typeof ai.models.generateContentStream>> | null = null;
+    let lastErr: unknown = null;
 
     for (const model of candidateModels) {
       try {
@@ -174,7 +147,7 @@ export async function POST(req: Request) {
         if (streamResult) break;
       } catch (err) {
         lastErr = err;
-        console.warn(`Model ${model} failed, trying next candidate:`, (err as any)?.message || err);
+        console.warn(`Model ${model} failed, trying next candidate:`, err instanceof Error ? err.message : String(err));
       }
     }
 

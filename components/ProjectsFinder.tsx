@@ -55,22 +55,24 @@ export default function ProjectsFinder({
 
   // Entrance & Exit animations
   useEffect(() => {
+    let timer: NodeJS.Timeout;
     if (isOpen) {
-      setIsRendered(true);
-      setWindowState("normal");
-      setCurrentFolder("root");
-      const timer = setTimeout(() => {
-        setIsVisible(true);
-      }, 20);
-      return () => clearTimeout(timer);
-    } else {
-      setIsVisible(false);
-      const timer = setTimeout(() => {
-        setIsRendered(false);
+      timer = setTimeout(() => {
+        setIsRendered(true);
+        setWindowState("normal");
         setCurrentFolder("root");
-      }, 220);
-      return () => clearTimeout(timer);
+        setIsVisible(true);
+      }, 10);
+    } else {
+      timer = setTimeout(() => {
+        setIsVisible(false);
+        setTimeout(() => {
+          setIsRendered(false);
+          setCurrentFolder("root");
+        }, 200);
+      }, 0);
     }
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   // RAF sync only when rendered
